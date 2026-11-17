@@ -220,7 +220,7 @@ test("the agent talks in plain words, never a numbered menu", async () => {
   // a suggestion is offered first, and "yes" takes it
   e.fillDetails("next", null, null, null, null, null, Source.VOICE);
   await choose("c6"); await choose("other");
-  assert.equal(spoken(e.step), "Which chapter? How about chapter 1, Exploring Magnets? Or tell me another one.");
+  assert.equal(spoken(e.step), "Which chapter? How about chapter 1, Exploring Magnets? It comes first in the textbook. Or tell me another one.");
   assert.deepEqual(match("yes", e.step, null), { type: "choose", choiceId: "6-magnets" });
   const help = e.command("help", Source.VOICE);
   assert.match(help, /You can say chapter 1, Exploring Magnets, chapter 2, /); // the full list only when asked

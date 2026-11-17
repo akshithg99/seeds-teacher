@@ -125,7 +125,7 @@ export function buildStep(e) {
       const chapters = Curriculum.forClass(c).map((x) => choice(x.id, `Chapter ${x.number}: ${x.name}`, { words: [x.name.toLowerCase(), `chapter ${x.number}`] }));
       const choices = [...(next ? [choice("next", `The next chapter: ${next.name}`, { words: ["next chapter", "the next chapter", "next"], suggested: true })] : []), ...chapters.filter((x) => !next || x.id !== next.id)];
       return makeStep("sched_chapter", Flow.SCHEDULE, "Chapter", "Which chapter? You can say 'the next chapter'.", paged(choices, r.page),
-        { known: [["Class", `${c}`], ...(d.day ? [["Day", d.day]] : []), ...(d.period != null ? [["Period", `${d.period}`]] : [])] });
+        { suggestion: next ? { choiceId: "next", reason: "because it follows on in the textbook" } : null, known: [["Class", `${c}`], ...(d.day ? [["Day", d.day]] : []), ...(d.period != null ? [["Period", `${d.period}`]] : [])] });
     }
 
     case "sched_more": {
@@ -191,7 +191,8 @@ export function buildStep(e) {
       const next = e.nextChapter(c);
       const list = Curriculum.forClass(c).sort((a, b) => (a.id === (next && next.id) ? -1 : a.number) - (b.id === (next && next.id) ? -1 : b.number))
         .map((x) => choice(x.id, `Chapter ${x.number}: ${x.name}` + (next && x.id === next.id ? " (next)" : ""), { words: [x.name.toLowerCase(), `chapter ${x.number}`], suggested: !!next && x.id === next.id }));
-      return makeStep("plan_chapter", Flow.PLAN, "Chapter", "Which chapter?", paged(list, r.page), { known: [["Class", `${c}`], ["Subject", "Science"]], progress: planProgress(0) });
+      return makeStep("plan_chapter", Flow.PLAN, "Chapter", "Which chapter?", paged(list, r.page), { known: [["Class", `${c}`], ["Subject", "Science"]], progress: planProgress(0),
+        suggestion: next ? { choiceId: next.id, reason: e.st.sessions.some((x) => x.endedAt != null && (e.lesson(x.lessonId) || {}).classNum === c) ? "because it's where your class is up to" : "because it comes first in the textbook" } : null });
     }
 
     case "plan_topic": {
@@ -199,7 +200,8 @@ export function buildStep(e) {
       const next = e.nextTopic(chx);
       return makeStep("plan_topic", Flow.PLAN, "Topic", "Which topic is this lesson on?",
         paged(chx.topics.map((x) => choice(x.id, x.name + (next && x.id === next.id ? " (next)" : ""), { words: [x.name.toLowerCase()], suggested: !!next && x.id === next.id })), r.page),
-        { known: [["Class", `${chx.classNum}`], ["Chapter", `${chx.number}. ${chx.name}`]], progress: planProgress(0) });
+        { known: [["Class", `${chx.classNum}`], ["Chapter", `${chx.number}. ${chx.name}`]], progress: planProgress(0),
+          suggestion: next ? { choiceId: next.id, reason: "because it's the next topic your class hasn't finished" } : null });
     }
 
     case "plan_confirm": {

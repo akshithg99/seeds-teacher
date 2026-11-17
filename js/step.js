@@ -81,7 +81,9 @@ export function optionsPhrase(s, full = false) {
     // one offer, like a person would make it; at most one named alternative
     const rest = opts.filter((c) => c !== p);
     const offer = p.label.startsWith("Same as last time") ? `Same as last time, ${sayLabel(p.label)}?` : `How about ${sayLabel(p.label)}?`;
-    return offer + (rest.length === 1 ? ` Or ${sayLabel(rest[0].label)}.` : rest.length || more ? " Or tell me another one." : "");
+    // the reason goes with the offer, as a person would give it: "It comes next in the textbook." (FR-88)
+    const why = s.suggestion && s.suggestion.choiceId === p.id ? ` ${s.suggestion.reason.replace(/^because /, "").replace(/^./, (x) => x.toUpperCase())}.` : "";
+    return offer + why + (rest.length === 1 ? ` Or ${sayLabel(rest[0].label)}.` : rest.length || more ? " Or tell me another one." : "");
   }
   const q = s.question.toLowerCase();
   // a yes-or-no question needs no list: "Shall we get it ready now?" is answered with "yes"

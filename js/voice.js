@@ -16,6 +16,11 @@ export class SpeechIn {
   }
   get available() { return !!this.SR; }
   get name() { return `browser recogniser (${this.lang})`; }
+  /** Safari (iPhone, iPad, Mac) starts the recogniser only from a tap, not after the agent has spoken. */
+  get needsTap() {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    return /iPhone|iPad|iPod/.test(ua) || (/Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|Android|FxiOS/.test(ua));
+  }
 
   listen(_hints, windowMs, long, L, fromGesture) {
     this.cancel();
@@ -121,6 +126,15 @@ export class SpeechOut {
     // some browsers never fire onend; move on after a generous estimate
     const dog = setTimeout(done, 4000 + (text.split(/\s+/).length * 700) / this.rate);
     u.onend = done; u.onerror = done;
+    s.speak(u);
+  }
+  /** A short spoken note while working. It sits in the speech queue ahead of the reply and is cut off by stop(). */
+  note(text) {
+    const s = synth(), v = voiceFor("English");
+    if (!s) return;
+    const u = new SpeechSynthesisUtterance(text);
+    if (v) { u.voice = v; u.lang = v.lang; }
+    u.rate = this.rate;
     s.speak(u);
   }
   end() { this.ended = true; this.check(); }
@@ -268,6 +282,9 @@ export class VoiceOrchestrator {
     this.awake = false; this.interrupted = false; this.misses = 0; this.missStep = ""; this.forceListen = false;
     this.abort = null; this.listeners = new Set();
     engine.subscribe((src) => {
+      // say what it is doing while a voice request is worked on: "Preparing your lesson plan."
+      if (engine.busy && engine.busy !== this.narrated && this.state === "THINKING") { this.narrated = engine.busy; this.output.note(engine.busy.replace(/…$/, ".")); }
+      if (!engine.busy) this.narrated = null;
       if (src && src !== Source.VOICE && this.showOptions) { this.showOptions = false; this.emit(); }
       // app-caused changes (lesson audio finished or failed) are announced with the guide on
       if (src === Source.SYSTEM && engine.voiceGuideOn && this.state === "SLEEP" && !engine.st.screenReader) this.speak(spoken(engine.step), false);
@@ -298,7 +315,11 @@ export class VoiceOrchestrator {
     this.player.pauseForAgent();
     this.brain.newConversation();
     this.awake = true; this.misses = 0;
-    this.listen(true);
+    // Safari only lets the recogniser start inside the tap itself, so there it listens at once (the tone is the greeting)
+    if (this.input.needsTap) { this.listen(true); return; }
+    this.forceListen = true;
+    this.speak(this.greeted ? "Yes, how can I help?" : "Hi, how can I help?", true);
+    this.greeted = true;
   }
 
   /** Any tap on the screen stops the agent's speech at once (FR-93), without starting to listen. */

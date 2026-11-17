@@ -15,7 +15,7 @@ beforeEach(async () => {
   e = new Engine(new Store(null), new ContentGenerator(new Claude("")), { play: () => true, toggle: noop, replay: noop, stop: noop, isPlaying: () => false, hasMedia: () => false });
   e.signIn("9000000001", "seeds123", true);
   await e.choose("no", Source.BUTTON);
-  out = { available: true, said: [], say(t, done) { this.said.push(t); this.done = done; }, begin(d) { this.done = d; }, enqueue(t) { this.said.push(t); }, end() {}, stop() {} };
+  out = { available: true, said: [], notes: [], say(t, done) { this.said.push(t); this.done = done; }, note(t) { this.notes.push(t); }, begin(d) { this.done = d; }, enqueue(t) { this.said.push(t); }, end() {}, stop() {} };
   const input = { available: true, name: "fake recogniser", listen(_h, _w, _l, L) { this.L = L; }, stop: noop, cancel: noop };
   brain = { available: false, missed: false, newConversation: noop, turn: async () => ({}) };
   v = new VoiceOrchestrator(e, brain, input, out, { listening: noop, endListening: noop, startWorking: noop, stopWorking: noop, unlock: noop },
@@ -63,6 +63,30 @@ test("a commit by voice needs its own word", async () => {
   assert.ok(e.pending, "language is read back first");
   await v.handle("yes");
   assert.equal(e.classLang(6), "English");
+});
+
+test("waking greets, then listens; work in progress is said aloud", async () => {
+  v.input.needsTap = false;
+  v.wake();
+  assert.equal(out.said.at(-1), "Hi, how can I help?");
+  out.done(); // greeting finished
+  assert.equal(v.state, "LISTENING");
+  v.sleep(); v.wake();
+  assert.equal(out.said.at(-1), "Yes, how can I help?");
+  // a voice request that prepares something says what it is doing
+  await e.choose("plan", Source.BUTTON); await e.choose("c6", Source.BUTTON); await e.choose("6-magnets", Source.BUTTON); await e.choose("6-magnets-2", Source.BUTTON);
+  e.setClassLang(6, "English"); await e.choose("yes", Source.BUTTON); await e.choose("use_as_is", Source.BUTTON); await e.choose("topic", Source.BUTTON);
+  await v.handle("skip");
+  assert.deepEqual(out.notes, ["Preparing your lesson plan."]);
+  assert.equal(e.step.id, "tik_review");
+});
+
+test("Safari listens straight from the tap, with no spoken greeting", () => {
+  v.input.needsTap = true;
+  const before = out.said.length;
+  v.wake();
+  assert.equal(v.state, "LISTENING");
+  assert.equal(out.said.length, before);
 });
 
 test("streamed text is spoken sentence by sentence", () => {
