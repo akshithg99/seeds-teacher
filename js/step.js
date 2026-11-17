@@ -57,10 +57,46 @@ export const langCode = (lang) => LANG_CODE[lang] || "en-IN";
 
 const trimDot = (s) => s.replace(/\.+$/, "");
 
-/** What the agent says for this step: status, then one question and its options in a fixed order (AC-48.2). */
+// Options the agent talks about. Leaving, paging and the menu are always there, so they are not read out.
+const QUIET = new Set(["home", "__more", "__first", "menu"]);
+const talkable = (s) => s.choices.filter((c) => c.enabled && !QUIET.has(c.id));
+/** How an option is said: "Chapter 1: Exploring Magnets (next)" -> "chapter 1, Exploring Magnets". */
+export const sayLabel = (l) => l.replace(/ \(next\)$/, "").replace(/\?$/, "").replace(/^Same as last time: /, "").replace(/: /g, ", ").replace(/^(Chapter|Class|Period) /, (m) => m.toLowerCase()).replace(/^\+ /, "");
+const orList = (xs) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " or " + xs[xs.length - 1]);
+const keyWord = (l) => sayLabel(l).toLowerCase().split(/[ ,]+/).find((w) => w.length > 3 && !["with", "from", "this", "your", "that"].includes(w)) || sayLabel(l).toLowerCase();
+
+/** The one option the agent offers first, like "Same as last time?" or the next chapter (FR-87). Null when there is no clear one. */
+export function proposal(s) { return talkable(s).find((c) => c.suggested) || null; }
+
+/**
+ * The choices in plain words, never as a numbered phone menu: a suggestion first when there is one, otherwise
+ * the options the question has not already named. Numbers still work when the teacher says them.
+ */
+export function optionsPhrase(s, full = false) {
+  const opts = talkable(s);
+  if (!opts.length) return "";
+  const more = s.choices.some((c) => c.id === "__more") ? " There are more choices too; just say more." : "";
+  const p = proposal(s);
+  if (p && !full) {
+    // one offer, like a person would make it; at most one named alternative
+    const rest = opts.filter((c) => c !== p);
+    const offer = p.label.startsWith("Same as last time") ? `Same as last time, ${sayLabel(p.label)}?` : `How about ${sayLabel(p.label)}?`;
+    return offer + (rest.length === 1 ? ` Or ${sayLabel(rest[0].label)}.` : rest.length || more ? " Or tell me another one." : "");
+  }
+  const q = s.question.toLowerCase();
+  // a yes-or-no question needs no list: "Shall we get it ready now?" is answered with "yes"
+  if (!full && /^(shall|do|is|would|should|can|start|prepare|add|use|open)\b/.test(q.split(/(?<=[.?!])\s+/).pop()) && opts.some((c) => c.words.includes("yes"))) return more.trim();
+  // an option counts as named by the question only through a word no other option shares ("class" names none of "Class 6/7/9")
+  const keys = opts.map((c) => keyWord(c.label));
+  const named = opts.filter((c, i) => q.includes(sayLabel(c.label).toLowerCase()) || (keys.indexOf(keys[i]) === keys.lastIndexOf(keys[i]) && q.includes(keys[i]))).length;
+  if (!full && named * 2 >= opts.length) return more.trim();
+  return `You can say ${orList(opts.map((c) => sayLabel(c.label)))}.` + more;
+}
+
+/** What the agent says for this step: where things stand, then one question, in plain words (AC-48.2). */
 export function spoken(s, includeSections = false, readOptions = true) {
   let out = "";
-  if (s.banner) out += s.banner + ". ";
+  if (s.banner) out += "This is a draft and isn't approved yet. ";
   if (s.announce) out += s.announce + " ";
   if (includeSections) {
     if (s.tik) TikTabs.summary(s.tik).forEach((x) => { out += x.heading + ". "; x.lines.forEach((l) => { out += trimDot(l) + ". "; }); });
@@ -70,11 +106,8 @@ export function spoken(s, includeSections = false, readOptions = true) {
     });
   }
   out += s.question;
-  if (readOptions && s.choices.length) {
-    const opts = s.choices.filter((c) => c.enabled).map((c, i) => `${i + 1}, ${c.label}`);
-    if (opts.length) out += " Say " + opts.join("; ") + ".";
-  }
-  return out.replace(/\.\./g, ".").trim();
+  if (readOptions) { const o = optionsPhrase(s); if (o) out += " " + o; }
+  return out.replace(/\.\./g, ".").replace(/\?\./g, "?").trim();
 }
 
 /** Text the LLM orchestrator reads each turn (FR-97). */

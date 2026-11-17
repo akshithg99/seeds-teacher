@@ -1,5 +1,5 @@
 import { Curriculum, DemoAccounts, LANGS } from "./data.js";
-import { Tier, Source, Flow, makeStep, choice, allChoices, spoken, inLang } from "./step.js";
+import { Tier, Source, Flow, makeStep, choice, allChoices, spoken, optionsPhrase, inLang } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
 import { DAYS } from "./matcher.js";
 import * as Offline from "./offline.js";
@@ -200,8 +200,8 @@ export class Engine {
     if (risky && !confirmed) {
       this.pending = { choice: c, stepId: s.id };
       this.emit(null);
-      const word = c.tier === Tier.COMMIT ? c.commitWord || c.label : "yes";
-      return (c.readBack || `${c.label}.`) + ` Say '${word}' to confirm, or 'cancel'.`;
+      // FR-98: a commit still needs its own word, asked for in plain words rather than a menu prompt
+      return (c.readBack || `${c.label}.`) + (c.tier === Tier.COMMIT ? ` If that's right, just say "${(c.commitWord || c.label).toLowerCase()}".` : " Shall I go ahead?");
     }
     // FR-103: a Change or Commit runs at most once per request
     const key = risky ? this.commitKey(s, c) : null;
@@ -227,7 +227,7 @@ export class Engine {
     if (source === Source.VOICE && p.choice.tier === Tier.COMMIT) {
       const word = (p.choice.commitWord || p.choice.label).toLowerCase();
       const u = (utterance || "").toLowerCase();
-      if (!u.includes(word) && !word.split(" ").every((w) => w.length > 2 && u.includes(w))) return `To confirm, say '${word}'. Or say 'cancel'.`;
+      if (!u.includes(word) && !word.split(" ").every((w) => w.length > 2 && u.includes(w))) return `For this one I need you to say "${word}". Or say cancel to leave it.`;
     }
     return this.choose(p.choice.id, source, true);
   }
@@ -236,7 +236,7 @@ export class Engine {
     const had = !!this.pending;
     this.pending = null;
     this.emit(null);
-    return had ? "Cancelled. Nothing changed." : "";
+    return had ? "Okay, I've left it as it was." : "";
   }
 
   /** Free speech or typed text for steps that allow it (FR-54). */
@@ -261,8 +261,8 @@ export class Engine {
       case "back": return this.back(source);
       case "where_am_i": return `You are in ${s.flow.label}: ${s.title}. ${s.question}`;
       case "what_did_you_do": return this.lastAction;
-      case "help": return (s.help || "Say an option's word or its number.") +
-        " At any step you can say Repeat, Back, Where am I, What did you just do, Home, Help or Stop." +
+      case "help": return (s.help ? s.help + " " : "") + optionsPhrase(s, true) +
+        " Any time, you can also say repeat, back, where am I, what did you just do, home, or stop." +
         (s.flow === Flow.TEACH ? " For the classroom speaker, connect it before class and set the volume high." : "");
       case "home": this.goHome(); this.notify(source); return "Home. " + spoken(this.step);
       case "voice_off": this.setVoiceGuide(false); return "Voice guide is off. Press the voice button when you need me.";

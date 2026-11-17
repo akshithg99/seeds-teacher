@@ -34,7 +34,8 @@ test("a miss asks again, then reads the options, then shows buttons (FR-56)", as
   await v.handle("banana");
   assert.match(out.said.at(-1), /didn't catch that/);
   await v.handle("banana");
-  assert.match(out.said.at(-1), /^Here are the options\./);
+  assert.match(out.said.at(-1), /^Let me put it another way\. .*You can say /);
+  assert.doesNotMatch(out.said.at(-1), /\d, /); // no numbered menu
   await v.handle("banana");
   assert.ok(v.showOptions);
   assert.equal(e.step.id, "home"); // nothing was changed by the misses

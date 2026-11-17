@@ -1,4 +1,4 @@
-import { Tier, FLOWS, allChoices } from "./step.js";
+import { Tier, FLOWS, allChoices, proposal } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
 import { Curriculum } from "./data.js";
 
@@ -77,6 +77,9 @@ export function match(text, step, pending) {
   const all = allChoices(step);
   const exact = all.find((c) => normalize(c.label) === t || c.words.some((w) => normalize(w) === t));
   if (exact) return { type: "choose", choiceId: exact.id };
+
+  // "yes" / "okay" to the one thing the agent just offered ("How about chapter 2?")
+  if (yes.has(t)) { const p = proposal(step); if (p) return { type: "choose", choiceId: p.id }; }
 
   // short utterance containing a label or word ("yes, approve it")
   if (wc(t) <= 6) {

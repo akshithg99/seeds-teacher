@@ -75,7 +75,7 @@ test("full journey, offline", async () => {
 
   // COMMIT by voice needs the action's own word, never just "yes" (FR-98, BR-29)
   await e.choose("approve", Source.VOICE);
-  assert.equal(await e.confirmPending(Source.VOICE, "yes"), "To confirm, say 'approve'. Or say 'cancel'.");
+  assert.equal(await e.confirmPending(Source.VOICE, "yes"), 'For this one I need you to say "approve". Or say cancel to leave it.');
   await e.confirmPending(Source.VOICE, "approve");
   assert.equal(e.lesson().tikState, "APPROVED");
 
@@ -209,9 +209,26 @@ test("cancelling an agent turn applies nothing (FR-99)", async () => {
   assert.equal(e.st.events[e.st.events.length - 1].action, "turn_cancelled"); // the log keeps what happened
 });
 
-test("spoken step reads options in a fixed order", async () => {
+test("the agent talks in plain words, never a numbered menu", async () => {
   await choose("no");
   await choose("plan");
-  assert.match(spoken(e.step), /Say 1, Class 6; 2, Class 7; 3, Class 9\.$/);
+  assert.equal(spoken(e.step), "Which class? You can say class 6, class 7 or class 9.");
+  // a question that already names its choices is not followed by a list
+  await choose("c6"); await choose("6-magnets"); await choose("6-magnets-2"); await choose("yes");
+  await choose("English", true);
+  assert.equal(spoken(e.step), "Synced from Content Studio. A TIK is ready for this chapter. Use it as it is, or open it and check it?");
+  // a suggestion is offered first, and "yes" takes it
+  e.fillDetails("next", null, null, null, null, null, Source.VOICE);
+  await choose("c6"); await choose("other");
+  assert.equal(spoken(e.step), "Which chapter? How about chapter 1, Exploring Magnets? Or tell me another one.");
+  assert.deepEqual(match("yes", e.step, null), { type: "choose", choiceId: "6-magnets" });
+  const help = e.command("help", Source.VOICE);
+  assert.match(help, /You can say chapter 1, Exploring Magnets, chapter 2, /); // the full list only when asked
+  for (const s of [spoken(e.step), help]) assert.doesNotMatch(s, /\b(say|press) \d|; \d, /i);
+  // a read-back asks in plain words, and Home sounds like a colleague
+  await choose("6-magnets"); await choose("6-magnets-1"); await choose("yes");
+  assert.match(await e.choose("use_as_is", Source.BUTTON), /Content Studio TIK/);
+  e.goHome();
+  assert.match(spoken(e.step), /^You have 1 lesson ready to teach\. /);
   void Offline;
 });

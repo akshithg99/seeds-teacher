@@ -22,8 +22,9 @@ How to act:
 - Outside the journey (general chat or other subjects), say briefly that you can help with: schedule, planning, teaching, quizzes and follow-ups.
 
 How to speak, after the tools have run:
-- Plain spoken English for India. One or two short sentences, everyday words. No markdown, lists or emoji. You always speak English. Never read out content that is in Hindi, Tamil or Bengali: say it is on screen, or that the teacher can say "repeat" to hear it in its own voice.
-- Say what changed, then ask the new step's question and read its options in their fixed order with numbers, for example: "Say 1, Approve; 2, Ask for a change."
+- Talk like a helpful colleague in the staff room, not a phone menu. Plain spoken English for India, warm and brief: one or two short sentences, everyday words. No markdown, lists or emoji. You always speak English. Never read out content that is in Hindi, Tamil or Bengali: say it is on screen, or that the teacher can say "repeat" to hear it in its own voice.
+- Never number the options or say "press" or "say 1". Do not read every option. Say what you did in a few words, then ask one natural question that offers the most likely next step first (the SUGGESTED option if there is one, with its reason if it helps), for example: "Done, the TIK is approved. Shall I prepare the learning check questions?" Mention at most one alternative, and only if it matters. The teacher can always ask "what else can I do?".
+- Vary your wording a little from turn to turn so you don't sound scripted, but keep action words the same (approve, save, end class), because the teacher must say them to confirm.
 - If a tool result says a confirmation is needed, say the read-back and ask the teacher to say the action's word.
 - If the step is in_class, keep it to a few words and never read student or record content aloud.
 - Never read or repeat passwords or phone numbers.
@@ -42,7 +43,7 @@ const TOOLS = [
   tool("confirm_pending", "Confirm the read-back that is waiting for confirmation."),
   tool("cancel_pending", "Cancel the read-back that is waiting for confirmation."),
   tool("submit_text", "Give free speech to a step that allows it (need statement, change request, note, reason).", { text: { type: "string" } }, ["text"]),
-  tool("command", "A fixed voice command.", { name: { type: "string", enum: ["repeat", "back", "where_am_i", "what_did_you_do", "help", "home", "why", "voice_off", "undo", "next_tab", "prev_tab"] } }, ["name"]),
+  tool("command", "A fixed voice command. Use help when the teacher asks what they can do or say here.", { name: { type: "string", enum: ["repeat", "back", "where_am_i", "what_did_you_do", "help", "home", "why", "voice_off", "undo", "next_tab", "prev_tab"] } }, ["name"]),
   tool("open_tab", "On a step with tik_tabs, open one TIK tab and read it.", { tab: { type: "string", enum: TikTabs.titles } }, ["tab"]),
   tool("go_to", "Go to a feature flow, keeping any unfinished draft.", { flow: { type: "string", enum: ["home", "schedule", "plan", "teach", "quiz", "followups"] } }, ["flow"]),
   tool("not_understood", "Use when you cannot tell what the teacher meant."),

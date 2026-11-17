@@ -11,6 +11,7 @@ const numberWord = (n) => ["zero", "one", "two", "three", "four", "five", "six",
 const ordinal = (n) => ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"][n] || `${n}th`;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const orList = (xs) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " or " + xs[xs.length - 1]);
 
 /** At most four options per step (FR-54): page longer lists with "More options". */
 export function paged(all, page) {
@@ -625,10 +626,25 @@ function homeStep(e) {
   const n4 = st.records.filter((x) => !x.saved).length; if (n4) waiting.push(`${n4} class record ${n4 === 1 ? "draft" : "drafts"}`);
   const n5 = st.patterns.filter((p) => p.state === "Proposed").length; if (n5) waiting.push(`${n5} follow-up ${n5 === 1 ? "suggestion" : "suggestions"}`);
   if (waiting.length) { sections.push(section("Waiting for you", waiting)); choices.push(choice("awaiting", "Review waiting items", { words: ["waiting", "review", "approval"] })); }
+  // the first action answers "yes" to the question Home asks, so a teacher can just agree (FR-62, FR-87)
+  if (choices[0] && ["continue", "start_next", "prepare_next"].includes(choices[0].id)) choices[0] = { ...choices[0], words: [...choices[0].words, "yes", "okay", "sure", "let's do it"] };
   const primary = [...choices.filter((c, i) => choices.findIndex((x) => x.id === c.id) === i).slice(0, 3), choice("menu", "More options", { words: ["more", "more options", "menu"] })];
-  let announce = "";
-  if (e.draft.justSignedIn) { announce += `Signed in as ${e.teacher && e.teacher.name}. `; e.draft.justSignedIn = false; }
-  sections.forEach((s) => { announce += `${s.heading}: ${s.lines.join(". ").replace(/\.$/, "")}. `; });
-  return makeStep("home", Flow.HOME, "Home", "What would you like to do?", primary, { announce: announce.trim() || null, sections,
+  // spoken like a colleague catching you up, not a list of headings
+  const talk = [];
+  if (e.draft.justSignedIn) { talk.push(`Hello, ${e.teacher && e.teacher.name}.`); e.draft.justSignedIn = false; }
+  let question = "What would you like to do?";
+  if (active) { talk.push(`You have a class going on: ${e.lessonName(e.lesson(active.lessonId))}.`); question = "Shall we carry on with it?"; }
+  if (next && !active) {
+    const [en, lx] = next, ch = Curriculum.chapter(en.chapterId), tp = lx ? e.topicOf(lx) : ch ? e.nextTopic(ch) : null;
+    const ok = lx && e.ready(lx);
+    talk.push(`Your next class is on ${en.day}, period ${en.period}: class ${en.classNum} science, ${ch && ch.name}, ${tp && tp.name}. ${ok ? "It's ready to teach." : "It isn't ready yet."}`);
+    question = ok ? "Shall we start the class?" : "Shall we get it ready now?";
+  } else if (!active) {
+    const ready = st.lessons.filter((x) => e.ready(x) && !e.taught(x)).length;
+    if (ready) talk.push(`You have ${plural(ready, "lesson", "lessons")} ready to teach.`);
+    else if (!st.lessons.length) talk.push("You don't have any lessons yet. I can help you set up your week, or plan a lesson.");
+  }
+  if (waiting.length) talk.push(`You ${talk.some((x) => !x.startsWith("Hello")) ? "also " : ""}have ${orList(waiting.map((w) => w.replace(/ waiting for approval$/, " to approve"))).replace(/ or ([^,]*)$/, " and $1")}.`);
+  return makeStep("home", Flow.HOME, "Home", question, primary, { announce: talk.join(" ") || null, sections,
     help: "With the voice guide you can say what you want in one sentence, for example: plan class 7 science for Thursday." });
 }

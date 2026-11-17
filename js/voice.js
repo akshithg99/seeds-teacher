@@ -1,5 +1,5 @@
 import { match, hints, opening } from "./matcher.js";
-import { Source, spoken, splitLang, stripLang, langCode } from "./step.js";
+import { Source, spoken, optionsPhrase, splitLang, stripLang, langCode } from "./step.js";
 
 // ===================================================================== ASR (FR-101: one interface)
 
@@ -68,7 +68,9 @@ const synth = () => (typeof window !== "undefined" ? window.speechSynthesis : nu
 export function voiceFor(lang) {
   const s = synth();
   if (!s) return null;
-  const voices = s.getVoices();
+  // the newer neural voices sound far less robotic than the older defaults: try them first
+  const natural = (v) => (/natural|neural|online|google|premium|enhanced|siri/i.test(v.name) ? 0 : 1);
+  const voices = [...s.getVoices()].sort((a, b) => natural(a) - natural(b));
   const code = langCode(lang || "English").toLowerCase();
   const prefix = code.slice(0, 2);
   const norm = (v) => v.lang.toLowerCase().replace("_", "-");
@@ -108,7 +110,8 @@ export class SpeechOut {
   }
   utter(text, voice, lang) {
     const s = synth(), my = this.token;
-    const u = new SpeechSynthesisUtterance(text);
+    // said the way a person would: "Start (5 min):" -> "Start, 5 minutes:"
+    const u = new SpeechSynthesisUtterance(text.replace(/\s*\((\d+) min\)/g, ", $1 minutes,").replace(/ · /g, ", "));
     if (voice) u.voice = voice;
     u.lang = voice ? voice.lang : langCode(lang || "English");
     u.rate = this.rate;
@@ -436,8 +439,8 @@ export class VoiceOrchestrator {
     this.misses++;
     const step = this.engine.step;
     if (this.misses === 1) { this.forceListen = true; this.speak((silence ? "I didn't hear anything. " : "Sorry, I didn't catch that. ") + step.question, true); }
-    else if (this.misses === 2) { this.forceListen = true; this.speak("Here are the options. " + spoken(step, false, true), true); }
-    else { this.set({ showOptions: true }); this.misses = 0; this.speak("I'll show the options as buttons. Tap one, or press the voice button to try again.", false); }
+    else if (this.misses === 2) { this.forceListen = true; this.speak(`Let me put it another way. ${step.question} ${optionsPhrase(step, true)}`, true); }
+    else { this.set({ showOptions: true }); this.misses = 0; this.speak("I'm having trouble hearing you. The choices are on the screen as buttons, or press the voice button and try me again.", false); }
   }
 
   // ------------------------------------------------------------------ speaking
