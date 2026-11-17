@@ -1,4 +1,4 @@
-import { Source, Tier, Flow, FLOWS, spoken, stripLang, langCode } from "./step.js";
+import { Source, Tier, Flow, stripLang, langCode } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
 import { LANGS, Curriculum } from "./data.js";
 import { KEY_REJECTED } from "./claude.js";
@@ -98,7 +98,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     const items = [Flow.HOME, Flow.SCHEDULE, Flow.PLAN, Flow.TEACH, Flow.QUIZ, Flow.FOLLOWUP];
     navEl.replaceChildren(h("div", { class: "shell" }, h("ul", { class: "navlist" },
       items.map((f) => h("li", {}, h("button", { type: "button", "aria-current": s.flow === f ? "page" : null, onclick: async () => { ui.navOpen = false; say(stripLang(await engine.goTo(f, Source.BUTTON)).replace(/^[^.]+\. /, "")); } }, f.label))),
-      h("li", {}, h("button", { type: "button", onclick: () => { ui.navOpen = false; renderTop(); say(engine.command("help", Source.BUTTON), true); } }, "Help")),
+      h("li", {}, h("button", { type: "button", onclick: () => { ui.navOpen = false; renderTop(); say(engine.command("help", Source.BUTTON)); } }, "Help")),
       h("li", {}, h("button", { type: "button", onclick: () => { ui.navOpen = false; voice.stopAll(); engine.signOut(); } }, "Sign out")),
     )));
   }
@@ -148,7 +148,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   function selectTab(i, focus = false) {
     const text = engine.selectTab(i);
     if (focus) { const t = document.getElementById(`tab-${engine.tikTab}`); if (t) t.focus(); } // render ran synchronously on the tab change
-    if (engine.voiceGuideOn && !engine.st.screenReader) voice.afterButton(text, true);
+    voice.afterButton(text, false); // a tap on a tab is a button action: the agent stays quiet
   }
 
   // ------------------------------------------------------------------ step
@@ -203,8 +203,6 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
       const msg = engine.signIn(phone.value, pw.value, remember.checked);
       if (msg) { ui.signInErr = msg; ui.phone = phone.value; ui.signInDirty = true; render(); document.getElementById("phone").focus(); return; }
       ui.signInErr = ""; setSession(remember.checked);
-      // FR-86: the voice question is asked aloud and on screen; this tap lets the browser speak
-      if (engine.step.id === "voice_pref") voice.speak(spoken(engine.step), false);
     } },
       h("h1", { tabindex: "-1", id: "step-title" }, "Sign in to SEEDS"),
       h("p", {}, "Use the phone number and password your school admin gave you. Type them; the voice guide never listens to them."),
@@ -246,8 +244,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
       h("div", { class: "head" }, h("h2", { id: "settings-title" }, "Settings"), h("button", { class: "btn", type: "button", onclick: () => dlg.close() }, "Close")),
       h("div", { class: "body" },
         h("h3", {}, "Voice guide"),
-        check("set-voice", "Guide me by voice", engine.voiceGuideOn, (ev) => { engine.setVoiceGuide(ev.target.checked); }),
-        check("set-sr", "I use a screen reader (the voice guide then waits for the voice button and does not talk over it)", !!st.screenReader, (ev) => engine.setPref("screenReader", ev.target.checked)),
+        h("p", { class: "small" }, "The voice guide starts only when you press the voice button. Using the buttons never starts it."),
+        check("set-voice", "Keep the conversation going: after I answer, listen for your next answer until you say stop", engine.voiceGuideOn, (ev) => { engine.setVoiceGuide(ev.target.checked); }),
         check("set-barge", "Stop speaking when I start talking (use with headphones; never in class)", !!st.bargeIn, (ev) => engine.setPref("bargeIn", ev.target.checked)),
         h("label", { for: "set-rate", class: "small" }, `Speech speed: ${st.speechRate.toFixed(1)}×`),
         h("input", { type: "range", class: "range", id: "set-rate", min: "0.7", max: "1.4", step: "0.1", value: String(st.speechRate), onchange: (ev) => { engine.setPref("speechRate", parseFloat(ev.target.value)); voice.output.rate = parseFloat(ev.target.value); openSettings(); } }),

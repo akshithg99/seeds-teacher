@@ -51,7 +51,7 @@ export function buildStep(e) {
       return makeStep("voice_pref", Flow.SETUP, "Voice guide", "Do you want me to guide you by voice?",
         [choice("yes", "Yes, guide me by voice", { words: ["yes", "guide me"] }), choice("no", "No, I'll use buttons", { words: ["no", "buttons"] })],
         { announce: d.justSignedIn ? `Signed in as ${e.teacher && e.teacher.name}.` : null,
-          sections: [section("About the voice guide", ["I read each step and you can answer by speaking, in English.", "Buttons always work too. You can change this any time in Settings, or by saying 'turn off voice guide'."])] });
+          sections: [section("About the voice guide", ["When you press the voice button, I listen and talk with you in English. With the guide on, I keep the conversation going until you say stop.", "Using the buttons never starts me. You can change this any time in Settings, or by saying 'turn off voice guide'."])] });
 
     case "home": return homeStep(e);
 

@@ -286,8 +286,8 @@ export class VoiceOrchestrator {
       if (engine.busy && engine.busy !== this.narrated && this.state === "THINKING") { this.narrated = engine.busy; this.output.note(engine.busy.replace(/…$/, ".")); }
       if (!engine.busy) this.narrated = null;
       if (src && src !== Source.VOICE && this.showOptions) { this.showOptions = false; this.emit(); }
-      // app-caused changes (lesson audio finished or failed) are announced with the guide on
-      if (src === Source.SYSTEM && engine.voiceGuideOn && this.state === "SLEEP" && !engine.st.screenReader) this.speak(spoken(engine.step), false);
+      // app-caused changes (lesson audio finished or failed) are announced only if the teacher was last using the agent
+      if (src === Source.SYSTEM && this.voiceSession && this.state === "SLEEP") this.speak(spoken(engine.step), false);
     });
   }
   subscribe(f) { this.listeners.add(f); return () => this.listeners.delete(f); }
@@ -314,7 +314,7 @@ export class VoiceOrchestrator {
     if (!this.input.available) { this.speak("This browser can't listen. Use Chrome, Edge or Safari for the voice guide. The buttons work everywhere.", false); return; }
     this.player.pauseForAgent();
     this.brain.newConversation();
-    this.awake = true; this.misses = 0;
+    this.awake = true; this.misses = 0; this.voiceSession = true;
     // Safari only lets the recogniser start inside the tap itself, so there it listens at once (the tone is the greeting)
     if (this.input.needsTap) { this.listen(true); return; }
     this.forceListen = true;
@@ -333,13 +333,13 @@ export class VoiceOrchestrator {
   }
 
   /**
-   * After a button action. READ actions ("Hear them") are always spoken. Otherwise, with the voice guide on and
-   * no screen reader in use, say what changed and the new step (buttons and voice share the screens).
+   * After a button action. Buttons never start the agent: only a button that asks to hear something
+   * ("Hear them") is spoken, and the agent does not listen afterwards. The voice button is the only way in.
    */
   afterButton(result, read) {
+    this.voiceSession = false;
     if (this.player.isPlaying()) return; // never talk over lesson audio (FR-61)
     if (read && result) this.speak(result, false);
-    else if (this.engine.voiceGuideOn && !this.engine.st.screenReader) { const t = this.afterAction(result); if (t) this.speak(t, false); }
   }
 
   sleep() { this.awake = false; this.vad.stop(); this.input.cancel(); this.earcons.stopWorking(); this.set({ state: "SLEEP" }); }

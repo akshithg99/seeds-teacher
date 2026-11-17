@@ -6,7 +6,7 @@ import * as Offline from "./offline.js";
 import { buildStep, PLANNED_MINUTES } from "./steps.js";
 
 export const emptyState = () => ({
-  signedInPhone: null, rememberMe: true, voiceGuide: {}, speechRate: 1, bargeIn: false, screenReader: false,
+  signedInPhone: null, rememberMe: true, voiceGuide: {}, speechRate: 1, bargeIn: false,
   classLang: {}, schedule: [], lessons: [], sessions: [], records: [], quizzes: [], patterns: [], events: [], committed: [],
 });
 

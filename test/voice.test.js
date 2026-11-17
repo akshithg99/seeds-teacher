@@ -81,6 +81,23 @@ test("waking greets, then listens; work in progress is said aloud", async () => 
   assert.equal(e.step.id, "tik_review");
 });
 
+test("buttons never start the agent, even with the voice guide on", async () => {
+  e.setVoiceGuide(true);
+  const before = out.said.length;
+  v.afterButton(await e.choose("plan", Source.BUTTON), false);
+  v.afterButton(e.selectTab(1), false);
+  assert.equal(out.said.length, before);
+  assert.equal(v.state, "SLEEP");
+  // "Hear them" is spoken because the tap asked for it, but the agent does not start listening
+  v.afterButton("Question one.", true);
+  assert.equal(out.said.at(-1), "Question one.");
+  out.done();
+  assert.equal(v.state, "SLEEP");
+  // lesson audio finishing is not announced after button use
+  e.notify(Source.SYSTEM);
+  assert.equal(out.said.at(-1), "Question one.");
+});
+
 test("Safari listens straight from the tap, with no spoken greeting", () => {
   v.input.needsTap = true;
   const before = out.said.length;
