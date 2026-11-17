@@ -42,6 +42,14 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   const fbEl = h("div", { class: "feedback", role: "status", "aria-live": "polite" });
   const dlg = h("dialog", { class: "settings", "aria-labelledby": "settings-title" });
   app.append(voiceEl, topEl, navEl, mainEl, fbEl, dlg);
+  // The voice and feedback bars sit over the page; pad the page by their real height so they never hide content.
+  const fit = () => {
+    const root = document.documentElement.style;
+    root.setProperty("--voice-real", voiceEl.offsetHeight + "px");
+    root.setProperty("--bottom", voiceEl.offsetHeight + fbEl.offsetHeight + "px");
+  };
+  if (window.ResizeObserver) { const ro = new ResizeObserver(fit); ro.observe(voiceEl); ro.observe(fbEl); } // rotation and text resizing
+  window.addEventListener("resize", fit);
 
   // ------------------------------------------------------------------ actions
   const say = (text, read = false) => { setFeedback(text); voice.afterButton(text, read); };
@@ -81,6 +89,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     if (voice.said && (st === "SPEAKING" || st === "SLEEP")) lines.push(h("div", { class: "vline" }, `SEEDS: ${voice.said}`));
     const hint = matchMedia("(pointer: fine)").matches ? `Shortcut: ${SHORTCUT_TEXT}. Esc stops me.` : "Tap anywhere to stop me.";
     voiceEl.replaceChildren(h("div", { class: "shell" }, btn, h("div", { class: "vtext" }, h("div", { class: "vstate", "aria-hidden": "true" }, label), lines, !lines.length ? h("div", { class: "vhint" }, hint) : null)));
+    fit();
   }
 
   // ------------------------------------------------------------------ top bar + nav
@@ -90,7 +99,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     topEl.replaceChildren(h("div", { class: "shell" },
       h("button", { class: "iconbtn", type: "button", "aria-label": "Back", "aria-disabled": engine.canGoBack ? null : "true", onclick: onBack }, svg(ICON.back)),
       h("div", { class: "flow" }, s.flow.label),
-      h("button", { class: "iconbtn", type: "button", "aria-expanded": String(ui.navOpen), "aria-controls": "nav", onclick: () => { ui.navOpen = !ui.navOpen; renderTop(); } }, svg(ICON.menu), h("span", {}, "Menu")),
+      h("button", { class: "iconbtn", type: "button", "aria-expanded": String(ui.navOpen), "aria-controls": "nav", onclick: () => { ui.navOpen = !ui.navOpen; renderTop(); } }, svg(ICON.menu), h("span", { class: "label" }, "Menu")),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Settings", onclick: openSettings }, svg(ICON.gear)),
     ));
     if (!ui.navOpen) { navEl.replaceChildren(); return; }
@@ -106,11 +115,12 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   // ------------------------------------------------------------------ feedback bar (with Undo, FR-98)
   function renderFeedback() {
     const u = engine.undoPoint;
-    if (!ui.feedback && !u) { fbEl.replaceChildren(); return; }
+    if (!ui.feedback && !u) { fbEl.replaceChildren(); fit(); return; }
     fbEl.replaceChildren(h("div", { class: "shell" }, h("div", { class: "inner" },
       h("div", { class: "msg" }, ui.feedback || `You can undo: ${u.label}.`),
       u ? h("button", { class: "btn", type: "button", onclick: onUndo, "aria-label": `Undo ${u.label}` }, "Undo") : null,
     )));
+    fit();
   }
 
   // ------------------------------------------------------------------ TIK tabs
