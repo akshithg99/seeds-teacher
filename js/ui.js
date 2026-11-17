@@ -30,13 +30,16 @@ const lc = (lang) => (lang && lang !== "English" ? langCode(lang) : null);
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "");
 export const SHORTCUT_TEXT = "Ctrl + Shift + Space";
 
-export function mountUI({ engine, voice, claude, player, saveKey, removeKey, clearData, setSession }) {
+export function mountUI({ engine, voice, claude, player, saveKey, removeKey, clearData, setSession, preview = false }) {
   const app = document.getElementById("app");
   const ui = { navOpen: false, freeText: "", feedback: "", feedbackTimer: null, lastStepId: null, lastSignedIn: null, signInErr: "", showPw: false };
 
   // DOM order sets focus order: the voice bar comes first on every screen (FR-90), the layout puts it at the bottom.
   const voiceEl = h("section", { class: "voice", "aria-label": "Voice guide" });
   const topEl = h("header", { class: "topbar" });
+  // Testers must be able to tell the preview site from the live one at a glance.
+  const badge = () => preview ? h("span", { class: "badge" }, "Preview") : null;
+  if (preview) document.title = "Preview: " + document.title;
   const navEl = h("nav", { "aria-label": "Feature flows", id: "nav" });
   const mainEl = h("main", { class: "shell", id: "main" });
   const fbEl = h("div", { class: "feedback", role: "status", "aria-live": "polite" });
@@ -94,10 +97,11 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
 
   // ------------------------------------------------------------------ top bar + nav
   function renderTop() {
-    if (!engine.st.signedInPhone) { topEl.replaceChildren(h("div", { class: "shell" }, h("div", { class: "flow" }, "SEEDS Teacher"))); navEl.replaceChildren(); return; }
+    if (!engine.st.signedInPhone) { topEl.replaceChildren(h("div", { class: "shell" }, badge(), h("div", { class: "flow" }, "SEEDS Teacher"))); navEl.replaceChildren(); return; }
     const s = engine.step;
     topEl.replaceChildren(h("div", { class: "shell" },
       h("button", { class: "iconbtn", type: "button", "aria-label": "Back", "aria-disabled": engine.canGoBack ? null : "true", onclick: onBack }, svg(ICON.back)),
+      badge(),
       h("div", { class: "flow" }, s.flow.label),
       h("button", { class: "iconbtn", type: "button", "aria-expanded": String(ui.navOpen), "aria-controls": "nav", onclick: () => { ui.navOpen = !ui.navOpen; renderTop(); } }, svg(ICON.menu), h("span", { class: "label" }, "Menu")),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Settings", onclick: openSettings }, svg(ICON.gear)),

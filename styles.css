@@ -46,6 +46,7 @@ main.shell { padding-block: 8px calc(var(--bottom, calc(var(--voice-h) + env(saf
 /* ---------------- top bar */
 .topbar { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); }
 .topbar .shell { display: flex; align-items: center; gap: 8px; min-height: 64px; padding-block: 8px; }
+.topbar .badge { flex: none; background: var(--ink); color: var(--bg); font-weight: 700; font-size: .85rem; padding: 4px 10px; border-radius: 999px; }
 .topbar .flow { flex: 1; min-width: 0; font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
 .iconbtn { min-width: 48px; min-height: 48px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; cursor: pointer; }
 .iconbtn:hover { border-color: var(--ink); }

@@ -30,7 +30,7 @@ const voice = new VoiceOrchestrator(engine, brain, new SpeechIn(), output, new E
 player.onChange = () => engine.refresh();
 
 mountUI({
-  engine, voice, claude, player,
+  engine, voice, claude, player, preview: !!NS,
   setSession: (remember) => { if (session) { if (remember) session.removeItem(SESSION_KEY); else session.setItem(SESSION_KEY, "1"); } },
   /** Saves the key only if Claude accepts it. Returns null on success, else a plain message. */
   saveKey: async (key) => {
