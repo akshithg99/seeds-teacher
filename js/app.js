@@ -9,11 +9,13 @@ import { mountUI } from "./ui.js";
 const safe = (get) => { try { const s = get(); const k = "__seeds_probe"; s.setItem(k, "1"); s.removeItem(k); return s; } catch { return null; } };
 const local = safe(() => window.localStorage);
 const session = safe(() => window.sessionStorage);
-const KEY_KEY = "seeds_claude_key";
+// The preview site shares the live site's origin (akshithg99.github.io), so it keeps its own keys.
+const NS = location.pathname.includes("-preview") ? "_preview" : "";
+const KEY_KEY = "seeds_claude_key" + NS, STATE_KEY = "seeds_state_v1" + NS, SESSION_KEY = "seeds_session" + NS;
 
-const store = new Store(local);
+const store = new Store(local, STATE_KEY);
 // FR-83 / FR-107: with Remember me unticked, the sign-in lasts only until the browser closes
-if (store.state.signedInPhone && !store.state.rememberMe && !(session && session.getItem("seeds_session"))) {
+if (store.state.signedInPhone && !store.state.rememberMe && !(session && session.getItem(SESSION_KEY))) {
   store.update((s) => ({ ...s, signedInPhone: null }));
 }
 
@@ -29,7 +31,7 @@ player.onChange = () => engine.refresh();
 
 mountUI({
   engine, voice, claude, player,
-  setSession: (remember) => { if (session) { if (remember) session.removeItem("seeds_session"); else session.setItem("seeds_session", "1"); } },
+  setSession: (remember) => { if (session) { if (remember) session.removeItem(SESSION_KEY); else session.setItem(SESSION_KEY, "1"); } },
   /** Saves the key only if Claude accepts it. Returns null on success, else a plain message. */
   saveKey: async (key) => {
     const before = claude.key;
@@ -40,7 +42,7 @@ mountUI({
     return null;
   },
   removeKey: () => { if (local) local.removeItem(KEY_KEY); claude.configure(""); },
-  clearData: () => { voice.stopAll(); if (local) { local.removeItem("seeds_state_v1"); local.removeItem(KEY_KEY); } if (session) session.clear(); location.reload(); },
+  clearData: () => { voice.stopAll(); if (local) { local.removeItem(STATE_KEY); local.removeItem(KEY_KEY); } if (session) session.clear(); location.reload(); },
 });
 
 // Leaving the page or switching apps stops the agent and lesson audio, so nothing talks in the background.
