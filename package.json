@@ -1,0 +1,10 @@
+{
+  "name": "seeds-teacher-web",
+  "private": true,
+  "type": "module",
+  "description": "SEEDS Teacher Agentic Journey prototype: one responsive webapp for phone and laptop browsers.",
+  "scripts": {
+    "start": "node serve.mjs",
+    "test": "node --test test/"
+  }
+}
