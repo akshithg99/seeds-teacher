@@ -1,4 +1,4 @@
-import { Source, Tier, Flow, stripLang, langCode } from "./step.js";
+import { Source, Tier, Flow, stripLang, langCode, spoken } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
 import { LANGS, Curriculum } from "./data.js";
 import { KEY_REJECTED } from "./claude.js";
@@ -24,6 +24,11 @@ const ICON = {
   gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M5.5 18.5l2.1-2.1M16.4 7.6l2.1-2.1" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/>',
+  home: '<path d="M4 11l8-6.5 8 6.5V20h-5.5v-5.5h-5V20H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  week: '<rect x="4" y="5.5" width="16" height="14.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  records: '<path d="M15.5 4.5l4 4L9 19H5v-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  help: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.6a2.5 2.5 0 114 2c-.9.6-1.6 1.1-1.6 2.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor"/>',
+  speaker: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   dots: '<circle cx="6" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/>',
 };
 const lc = (lang) => (lang && lang !== "English" ? langCode(lang) : null);
@@ -72,6 +77,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     const res = await engine.submitText(t, Source.BUTTON);
     say(res);
   }
+  async function goFlow(f) { ui.navOpen = false; say(stripLang(await engine.goTo(f, Source.BUTTON)).replace(/^[^.]+\. /, "")); }
+  function onHelp() { ui.navOpen = false; renderTop(); say(engine.command("help", Source.BUTTON)); }
   function onUndo() { say(engine.undo(Source.BUTTON)); }
   function onBack() { if (engine.canGoBack) say(engine.back(Source.BUTTON).replace(/^Back\. /, "")); }
 
@@ -101,8 +108,20 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     const lines = [];
     if (st === "LISTENING" || (voice.heard && st !== "SLEEP")) lines.push(h("div", { class: "vline" }, voice.heard ? `You: ${voice.heard}` : "Say an option, or what you want to do."));
     if (voice.said && (st === "SPEAKING" || st === "SLEEP")) lines.push(h("div", { class: "vline" }, `SEEDS: ${voice.said}`));
-    const hint = matchMedia("(pointer: fine)").matches ? `Shortcut: ${SHORTCUT_TEXT}. Esc stops me.` : "Tap anywhere to stop me.";
-    voiceEl.replaceChildren(h("div", { class: "shell" }, btn, h("div", { class: "vtext" }, h("div", { class: "vstate", "aria-hidden": "true" }, label), lines, !lines.length ? h("div", { class: "vhint" }, hint) : null)));
+    if (!lines.length && matchMedia("(pointer: fine)").matches) lines.push(h("div", { class: "vhint" }, `Shortcut: ${SHORTCUT_TEXT}. Esc stops me.`));
+    const short = { SLEEP: "Speak", LISTENING: "Listening", THINKING: "Working", SPEAKING: "Speaking" }[st];
+    const signedIn = !!engine.st.signedInPhone, flow = signedIn ? engine.step.flow : null;
+    const tab = (label, icon, onclick, current) => h("button", { class: "vtab", type: "button", "aria-current": current ? "page" : null, onclick }, svg(icon), h("span", {}, label));
+    // the mic stays first in focus order (FR-90); the layout draws it in the middle of the four tabs
+    voiceEl.replaceChildren(h("div", { class: "shell" + (signedIn ? " tabs" : "") },
+      h("div", { class: "micwrap" }, btn, h("span", { class: "miclabel", "aria-hidden": "true" }, short)),
+      lines.length ? h("div", { class: "vtext" }, lines) : null,
+      signedIn ? [
+        tab("Today", ICON.home, () => goFlow(Flow.HOME), flow === Flow.HOME),
+        tab("Week", ICON.week, () => goFlow(Flow.SCHEDULE), flow === Flow.SCHEDULE),
+        tab("Records", ICON.records, () => goFlow(Flow.FOLLOWUP), flow === Flow.FOLLOWUP),
+        tab("Help", ICON.help, onHelp, false),
+      ] : null));
     fit();
   }
 
@@ -121,8 +140,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     // FR-108 / §12: flat list in the order of the teaching day, the same at every screen size
     const items = [Flow.HOME, Flow.SCHEDULE, Flow.PLAN, Flow.TEACH, Flow.QUIZ, Flow.FOLLOWUP];
     navEl.replaceChildren(h("div", { class: "shell" }, h("ul", { class: "navlist" },
-      items.map((f) => h("li", {}, h("button", { type: "button", "aria-current": s.flow === f ? "page" : null, onclick: async () => { ui.navOpen = false; say(stripLang(await engine.goTo(f, Source.BUTTON)).replace(/^[^.]+\. /, "")); } }, f.label))),
-      h("li", {}, h("button", { type: "button", onclick: () => { ui.navOpen = false; renderTop(); say(engine.command("help", Source.BUTTON)); } }, "Help")),
+      items.map((f) => h("li", {}, h("button", { type: "button", "aria-current": s.flow === f ? "page" : null, onclick: () => goFlow(f) }, f.label))),
+      h("li", {}, h("button", { type: "button", onclick: onHelp }, "Help")),
       h("li", {}, h("button", { type: "button", onclick: () => { ui.navOpen = false; voice.stopAll(); engine.signOut(); } }, "Sign out")),
     )));
   }
@@ -183,7 +202,9 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     const kids = [];
     if (s.progress) kids.push(h("ol", { class: "stages", "aria-label": "Progress" }, s.progress.labels.map((x, i) => h("li", { class: i < s.progress.current ? "done" : null, "aria-current": i === s.progress.current ? "step" : null }, x))));
     if (s.known.length) kids.push(h("dl", { class: "known" }, s.known.map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])));
-    kids.push(h("h1", { class: "title", tabindex: "-1", id: "step-title" }, s.title));
+    // Listen reads the screen aloud; like every button, it never starts listening
+    kids.push(h("div", { class: "titlerow" }, h("h1", { class: "title", tabindex: "-1", id: "step-title" }, s.title),
+      h("button", { class: "listen", type: "button", onclick: () => voice.afterButton(spoken(s, true), true) }, svg(ICON.speaker), "Listen")));
     if (s.banner) kids.push(h("p", { class: "banner" }, s.banner));
     if (s.announce) kids.push(h("p", { class: "announce", lang: s.inClass && s.contentLang ? lc(s.contentLang) : null }, stripLang(s.announce)));
     if (s.contentLang && s.contentLang !== "English" && !hasVoice(s.contentLang)) kids.push(h("p", { class: "notice" }, `This device has no ${s.contentLang} voice, so the voice guide will not read the ${s.contentLang} text aloud. Add a ${s.contentLang} voice in the device's speech settings to hear it.`));
