@@ -77,9 +77,19 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
 
   function setFeedback(text) {
     ui.feedback = stripLang(text || "");
-    clearTimeout(ui.feedbackTimer);
-    if (ui.feedback) ui.feedbackTimer = setTimeout(() => { ui.feedback = ""; renderFeedback(); }, 10000);
+    if (ui.feedback) hideBarLater();
     renderFeedback();
+  }
+
+  // The bar hides after a few seconds so it doesn't cover the page. Undo still works by voice and Ctrl/⌘ + Z.
+  const BAR_MS = 6000;
+  function hideBarLater() {
+    clearTimeout(ui.feedbackTimer);
+    ui.feedbackTimer = setTimeout(function hide() {
+      // never pull it away while the pointer or keyboard focus is on it (WCAG 2.2.1)
+      if (fbEl.contains(document.activeElement) || fbEl.matches(":hover")) { ui.feedbackTimer = setTimeout(hide, BAR_MS); return; }
+      ui.feedback = ""; ui.hiddenUndo = engine.undoPoint; renderFeedback();
+    }, BAR_MS);
   }
 
   // ------------------------------------------------------------------ voice bar
@@ -119,7 +129,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
 
   // ------------------------------------------------------------------ feedback bar (with Undo, FR-98)
   function renderFeedback() {
-    const u = engine.undoPoint;
+    const u = engine.undoPoint !== ui.hiddenUndo ? engine.undoPoint : null;
+    if (u && u !== ui.shownUndo) { ui.shownUndo = u; hideBarLater(); } // a new change: show Undo for a few seconds
     if (!ui.feedback && !u) { fbEl.replaceChildren(); fit(); return; }
     fbEl.replaceChildren(h("div", { class: "shell" }, h("div", { class: "inner" },
       h("div", { class: "msg" }, ui.feedback || `You can undo: ${u.label}.`),
@@ -264,7 +275,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
         check("set-barge", "Stop speaking when I start talking (use with headphones; never in class)", !!st.bargeIn, (ev) => engine.setPref("bargeIn", ev.target.checked)),
         h("label", { for: "set-rate", class: "small" }, `Speech speed: ${st.speechRate.toFixed(1)}×`),
         h("input", { type: "range", class: "range", id: "set-rate", min: "0.7", max: "1.4", step: "0.1", value: String(st.speechRate), onchange: (ev) => { engine.setPref("speechRate", parseFloat(ev.target.value)); voice.output.rate = parseFloat(ev.target.value); openSettings(); } }),
-        h("p", { class: "small" }, `Laptop shortcut: ${SHORTCUT_TEXT} starts or stops the voice guide${isMac ? " (Control, not Command)" : ""}. Esc stops it.`),
+        h("p", { class: "small" }, `Laptop shortcut: ${SHORTCUT_TEXT} starts or stops the voice guide${isMac ? " (Control, not Command)" : ""}. Esc stops it. ${isMac ? "⌘" : "Ctrl"} + Z undoes the last change.`),
         h("h3", {}, "Class languages"),
         h("p", { class: "small" }, "What SEEDS prepares for each class is in that class's language. The voice guide always speaks English."),
         Curriculum.coveredClasses.map((c) => h("div", { class: "langrow" }, h("label", { for: `lang-${c}` }, `Class ${c}`),
@@ -342,6 +353,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   // ------------------------------------------------------------------ keyboard and taps (FR-90, FR-93, FR-99)
   document.addEventListener("keydown", (ev) => {
     if (ev.ctrlKey && ev.shiftKey && (ev.code === "Space" || ev.key === " ")) { ev.preventDefault(); voice.onVoiceButton(); return; }
+    const typing = ev.target.closest && ev.target.closest("input, textarea, [contenteditable]");
+    if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && ev.key.toLowerCase() === "z" && !typing && !dlg.open && engine.undoPoint) { ev.preventDefault(); onUndo(); return; }
     if (ev.key === "Escape") { if (voice.state !== "SLEEP") { ev.preventDefault(); voice.stopAll(); } return; }
     if (["Shift", "Control", "Alt", "Meta", "Tab"].includes(ev.key)) return;
     if (voice.state === "SPEAKING") voice.quietForTap();
