@@ -30,6 +30,7 @@ class Draft {
     this.classNum = null; this.chapterId = null; this.topicId = null; this.day = null; this.period = null;
     this.scheduleId = null; this.lessonId = null; this.editEntryId = null; this.proposed = null; this.pendingEntries = [];
     this.sessionId = null; this.recordId = null; this.quizId = null; this.patternId = null;
+    this.wsKind = null; this.wsItem = null;
     this.changeCount = 0; this.tries = 0; this.checkpointFor = "tik"; this.lcQueue = []; this.lcIndex = 0;
     this.audioClipId = null; this.justSignedIn = false; this.langFor = null; this.langNext = null;
   }
@@ -379,6 +380,7 @@ export class Engine {
       }
       case "QUIZ": this.go("quiz_pick"); break;
       case "FOLLOWUP": this.go("followups"); break;
+      case "WORKSPACE": this.go("workspace"); break;
       default: this.goHome();
     }
     this.notify(source);
@@ -607,13 +609,42 @@ export class Engine {
   async makeClip(l, variant, name, synced) {
     const ch = this.chapterOf(l), tp = this.topicOf(l);
     const lang = this.classLang(l.classNum);
-    const script = synced
-      ? `Synced audio for ${tp.name}. ` + tp.definitions.join(" ") + " Think of where you have noticed this at home. Then let us talk about it together."
-      : await this.gen.audioScript(ch, tp, variant, lang);
-    const words = script.split(/\s+/).length;
-    return { id: this.newId(), name, provenance: synced ? "Synced from Content Studio" : "Generated for this lesson", script,
-      lang: synced ? "English" : this.gen.draftLang(lang), approved: false, reviewed: false, durationSec: Math.round(words / 2.3) };
+    if (synced) return { ...this.syncedClip(tp), id: this.newId(), name };
+    const script = await this.gen.audioScript(ch, tp, variant, lang);
+    return { id: this.newId(), name, provenance: "Generated for this lesson", script,
+      lang: this.gen.draftLang(lang), approved: false, reviewed: false, durationSec: Math.round(script.split(/\s+/).length / 2.3) };
   }
+
+  /** Content Studio's audio for a topic. Sample: read from the Course text, in English. */
+  syncedClip(tp) {
+    const script = `Synced audio for ${tp.name}. ` + tp.definitions.join(" ") + " Think of where you have noticed this at home. Then let us talk about it together.";
+    return { id: `cs-${tp.id}`, name: "Audio from Content Studio", provenance: "Synced from Content Studio", script, lang: "English",
+      approved: false, reviewed: false, durationSec: Math.round(script.split(/\s+/).length / 2.3) };
+  }
+
+  /**
+   * The teacher's workspace: every TIK, audio and quiz from Content Studio, then everything made with SEEDS.
+   * Read-only here: Content Studio items can't be changed by teachers, and the teacher's own items are changed in their flows.
+   */
+  workspace() {
+    const tiks = [], audio = [], quizzes = [];
+    const QUIZ_STATUS = { Draft: "Not approved yet", Approved: "Approved", Live: "Open for students", Closed: "Closed" };
+    for (const ch of Curriculum.chapters) {
+      const where = `Class ${ch.classNum} ${ch.subject}, ${ch.name}`;
+      if (ch.syncedTik) tiks.push({ key: `cs:${ch.id}`, fromCS: true, title: `${where}: chapter TIK`, tik: ch.syncedTik, status: "Ready to use", lang: ch.syncedTik.lang });
+      for (const tp of ch.topics) if (tp.syncedAudio) audio.push({ key: `cs:${tp.id}`, fromCS: true, title: `${where}: ${tp.name}`, clip: this.syncedClip(tp), status: "Ready to use", lang: "English" });
+    }
+    for (const l of this.st.lessons) {
+      if (l.tik && !String(l.tik.provenance).startsWith("Synced")) {
+        tiks.push({ key: `l:${l.id}`, fromCS: false, title: `${this.lessonName(l)}: ${l.tik.scope === "chapter" ? "chapter" : "topic"} TIK`, tik: l.tik,
+          status: this.ready(l) ? "Approved" : "Not approved yet", lang: l.tik.lang });
+      }
+      for (const a of l.audio) if (!a.provenance.startsWith("Synced")) audio.push({ key: `a:${a.id}`, fromCS: false, title: `${this.lessonName(l)}: ${a.name}`, clip: a, status: a.approved ? "Approved" : "Not approved yet", lang: a.lang });
+    }
+    for (const q of this.st.quizzes) quizzes.push({ key: `q:${q.id}`, fromCS: false, title: `${this.lessonName(this.lesson(q.lessonId))}: quiz`, quiz: q, status: QUIZ_STATUS[q.state] || q.state, lang: q.lang });
+    return { tiks, audio, quizzes };
+  }
+  workspaceItem(key) { const w = this.workspace(); return [...w.tiks, ...w.audio, ...w.quizzes].find((x) => x.key === key) || null; }
 
   proposePatterns(lessonId, sessionId) {
     const l = this.lesson(lessonId), tp = this.topicOf(l);
@@ -721,8 +752,26 @@ export class Engine {
           case "quiz": this.go("quiz_pick"); break;
           case "followups": this.go("followups"); break;
           case "menu": this.go("menu"); break;
+          case "workspace": this.go("workspace"); break;
         }
         break;
+
+      case "workspace":
+        if (["tiks", "audio", "quizzes"].includes(c)) { d.wsKind = c; this.go("ws_list"); }
+        break;
+      case "ws_list":
+        if (c === "ws_home") this.go("workspace"); else { d.wsItem = c; this.go("ws_item"); }
+        break;
+      case "ws_item": {
+        const x = this.workspaceItem(d.wsItem);
+        if (c === "play" && x && x.clip) {
+          const ok = this.audio.play(x.clip, () => this.refresh(), () => this.refresh());
+          return ok ? "Playing." : "The audio didn't play on this device.";
+        }
+        if (c === "stop") { this.audio.stop(); return "Stopped."; }
+        if (c === "ws_back") { this.audio.stop(); this.go("ws_list"); }
+        break;
+      }
 
       case "awaiting": {
         const [kind, id] = [c.split(":")[0], c.split(":").slice(1).join(":")];

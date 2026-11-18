@@ -80,6 +80,7 @@ The key is checked before it is saved, and it is kept only in that browser.
 | F17 Learning check | Questions at planning (or the Course's own, used as they are), asked after class: most, some, few or none |
 | F5–F7 Audio and teaching | Prepare, preview and approve audio. Step-by-step teaching view. Play, pause and replay. "Audio not working?" leads to teacher-led in one step. End class with coverage. Extension activity on an early finish. |
 | F8 Quiz | Draft, approve, open until a deadline, close, class-level results (phone calls simulated) |
+| Workspace (BR-11, BR-21) | Every TIK, audio and quiz in one place, in two groups: from Content Studio, and made by you, with each item's status. Open a TIK as tabs, play audio and read its script, or read a quiz with its answers. Read-only: Content Studio items can't be changed by teachers, and your own are changed in their flows. Open it from Menu, More options, or by saying "workspace". |
 | F9/F10 | Pre-filled class record, preview of what is stored, save, follow-up suggestion, simpler TIK / audio / quiz through approval |
 
 Not built: sharing with my school (FR-44, needs a server), the per-topic language switch, real IVR calls, and a measured loudness check.

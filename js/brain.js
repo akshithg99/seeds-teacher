@@ -17,7 +17,7 @@ How to act:
 - If a confirmation is pending and the teacher clearly confirms, call confirm_pending. If they decline, call cancel_pending.
 - Commands: repeat, back, where_am_i, what_did_you_do, help, home, why (explain the suggestion), voice_off, undo (reverse the last change), next_tab and prev_tab (TIK tabs). Use the command tool. To open a named TIK tab, use open_tab.
 - On a step with free_speech_allowed, if the teacher is describing their class, a change request, a reason or a note, call submit_text with their words, cleaned of filler.
-- If the teacher names a feature (schedule, plan, teaching, quiz, follow-ups), call go_to.
+- If the teacher names a feature (schedule, plan, teaching, quiz, follow-ups, workspace), call go_to. The workspace lists every TIK, audio and quiz from Content Studio and made by the teacher.
 - If the teacher asks a question about this step or this lesson (what materials are needed, what changed, what is waiting, what comes next), answer it in a sentence from the step description, without calling an action tool, then ask what they would like to do.
 - If you cannot tell what they meant, call not_understood. Do not invent an answer.
 - Outside the journey (general chat or other subjects), say briefly that you can help with: schedule, planning, teaching, quizzes and follow-ups.
@@ -52,11 +52,11 @@ const TOOLS = [
   tool("submit_text", "Give free speech to a step that allows it (need statement, change request, note, reason).", { text: { type: "string" } }, ["text"]),
   tool("command", "A fixed voice command. Use help when the teacher asks what they can do or say here.", { name: { type: "string", enum: ["repeat", "back", "where_am_i", "what_did_you_do", "help", "home", "why", "voice_off", "undo", "next_tab", "prev_tab"] } }, ["name"]),
   tool("open_tab", "On a step with tik_tabs, open one TIK tab and read it.", { tab: { type: "string", enum: TikTabs.titles } }, ["tab"]),
-  tool("go_to", "Go to a feature flow, keeping any unfinished draft.", { flow: { type: "string", enum: ["home", "schedule", "plan", "teach", "quiz", "followups"] } }, ["flow"]),
+  tool("go_to", "Go to a feature flow, keeping any unfinished draft.", { flow: { type: "string", enum: ["home", "schedule", "plan", "teach", "quiz", "followups", "workspace"] } }, ["flow"]),
   tool("not_understood", "Use when you cannot tell what the teacher meant."),
 ];
 
-const FLOW_BY_NAME = { schedule: Flow.SCHEDULE, plan: Flow.PLAN, teach: Flow.TEACH, quiz: Flow.QUIZ, followups: Flow.FOLLOWUP, home: Flow.HOME };
+const FLOW_BY_NAME = { schedule: Flow.SCHEDULE, plan: Flow.PLAN, teach: Flow.TEACH, quiz: Flow.QUIZ, followups: Flow.FOLLOWUP, workspace: Flow.WORKSPACE, home: Flow.HOME };
 const num = (v) => (typeof v === "number" ? v : v != null && !isNaN(parseInt(v, 10)) ? parseInt(v, 10) : null);
 
 export class AgentBrain {

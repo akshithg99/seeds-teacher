@@ -138,7 +138,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     ));
     if (!ui.navOpen) { navEl.replaceChildren(); return; }
     // FR-108 / §12: flat list in the order of the teaching day, the same at every screen size
-    const items = [Flow.HOME, Flow.SCHEDULE, Flow.PLAN, Flow.TEACH, Flow.QUIZ, Flow.FOLLOWUP];
+    const items = [Flow.HOME, Flow.SCHEDULE, Flow.PLAN, Flow.TEACH, Flow.QUIZ, Flow.FOLLOWUP, Flow.WORKSPACE];
     navEl.replaceChildren(h("div", { class: "shell" }, h("ul", { class: "navlist" },
       items.map((f) => h("li", {}, h("button", { type: "button", "aria-current": s.flow === f ? "page" : null, onclick: () => goFlow(f) }, f.label))),
       h("li", {}, h("button", { type: "button", onclick: onHelp }, "Help")),

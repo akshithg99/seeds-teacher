@@ -105,11 +105,12 @@ h1.title:focus-visible { outline: 3px solid var(--focus); }
 .choice:hover { border-color: var(--accent); background: var(--surface); }
 .choice.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); min-height: 68px; font-size: 1.15rem; }
 .choice.primary:hover { filter: brightness(1.12); background: var(--accent); }
-.choice > span:first-child { display: flex; align-items: center; flex-wrap: wrap; }
+/* number in its own column, so a long label wraps beside it, not under it */
+.choice > span:first-child { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; }
 .choice .chev { font-size: 1.4rem; line-height: 1; }
-.choice .num { display: inline-grid; place-items: center; min-width: 32px; height: 32px; border-radius: 50%; background: var(--surface); color: var(--ink); font-size: .9rem; margin-right: 12px; flex: none; }
+.choice .num { display: inline-grid; place-items: center; min-width: 32px; height: 32px; border-radius: 50%; background: var(--surface); color: var(--ink); font-size: .9rem; }
 .choice.primary .num { background: var(--on-accent); color: var(--accent); }
-.choice .why { flex-basis: 100%; display: block; font-weight: 400; font-size: .95rem; padding-left: 44px; }
+.choice .why { grid-column: 2; display: block; font-weight: 400; font-size: .95rem; }
 .choice[aria-disabled="true"] { opacity: .6; border-style: dashed; cursor: not-allowed; }
 .choice.suggested { box-shadow: inset 6px 0 0 var(--teal); }
 .choice.primary.suggested { box-shadow: none; }

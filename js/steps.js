@@ -62,7 +62,56 @@ export function buildStep(e) {
         choice("teach_pick", "Teach a lesson", { words: ["teach"] }),
         choice("quiz", "Assessment or quiz", { words: ["quiz", "assessment"] }),
         choice("followups", "Follow-ups", { words: ["follow up", "remediation"] }),
+        choice("workspace", "Workspace", { words: ["workspace", "my content", "library"] }),
       ], r.page), { secondary: [homeBtn()] });
+
+    // ---------------- Workspace: everything from Content Studio and everything made by the teacher, to look at
+    case "workspace": {
+      const w = e.workspace();
+      const count = (fromCS) => [plural(w.tiks.filter((x) => x.fromCS === fromCS).length, "TIK", "TIKs"),
+        `${w.audio.filter((x) => x.fromCS === fromCS).length} audio`, plural(w.quizzes.filter((x) => x.fromCS === fromCS).length, "quiz", "quizzes")].join(", ");
+      const kind = (id, label, xs, words) => choice(id, label, { words, enabled: xs.length > 0, whyDisabled: xs.length ? null : `No ${label.toLowerCase()} yet.` });
+      return makeStep("workspace", Flow.WORKSPACE, "Workspace", "What would you like to look at?", [
+        kind("tiks", "TIKs", w.tiks, ["tik", "tiks", "teaching guides"]),
+        kind("audio", "Audio", w.audio, ["audio", "audios", "recordings"]),
+        kind("quizzes", "Quizzes", w.quizzes, ["quiz", "quizzes", "tests"]),
+      ], { announce: "Everything from Content Studio, and everything you made with SEEDS.",
+        sections: [section("From Content Studio", [count(true)]), section("Made by you", [count(false)])], secondary: [homeBtn()] });
+    }
+    case "ws_list": {
+      const kind = d.wsKind || "tiks", items = e.workspace()[kind] || [];
+      const name = { tiks: "TIKs", audio: "Audio", quizzes: "Quizzes" }[kind], noun = { tiks: "TIKs", audio: "audio", quizzes: "quizzes" }[kind];
+      const cs = items.filter((x) => x.fromCS), you = items.filter((x) => !x.fromCS);
+      const opts = items.map((x) => choice(x.key, `${x.title} · ${x.fromCS ? "Content Studio" : `made by you, ${x.status.toLowerCase()}`}`, { words: [x.title.toLowerCase()] }));
+      return makeStep("ws_list", Flow.WORKSPACE, name, items.length ? "Which one would you like to open?" : "There's nothing here yet.",
+        items.length ? paged(opts, r.page) : [choice("ws_home", "Back to Workspace")], {
+          sections: [
+            section("From Content Studio", cs.length ? cs.map((x) => x.title) : [`Content Studio has no ${noun} yet.`]),
+            section("Made by you", you.length ? you.map((x) => `${x.title} · ${x.status}`) : [`You haven't made any ${noun} yet.`]),
+          ],
+          secondary: items.length ? [choice("ws_home", "Back to Workspace"), homeBtn()] : [homeBtn()] });
+    }
+    case "ws_item": {
+      const x = e.workspaceItem(d.wsItem);
+      if (!x) return makeStep("ws_item", Flow.WORKSPACE, "Not found", "It's no longer in your workspace.", [choice("ws_back", "Back to the list")]);
+      const known = [["From", x.fromCS ? "Content Studio" : "Made by you"], ["Status", x.status], ["Language", x.lang || "English"]];
+      const back = choice("ws_back", "Back to the list", { words: ["back to the list", "the list"] });
+      if (x.tik) return makeStep("ws_item", Flow.WORKSPACE, "TIK", "Anything else?", [back], {
+        announce: `${x.title}. Say next tab, or a tab's name, to move through it.`, known, contentLang: x.tik.lang, secondary: [homeBtn()],
+        tik: { tik: x.tik, before: null, suggestions: [], status: x.status },
+        help: "The TIK has tabs: Summary, Objective, Steps, Activities, Materials, Accessibility, Extension, Sources and Why. Say next tab, previous tab, or a tab's name." });
+      if (x.clip) {
+        const playing = e.audio.isPlaying();
+        return makeStep("ws_item", Flow.WORKSPACE, "Audio", playing ? "Playing. Stop it?" : "Play it?", [
+          playing ? choice("stop", "Stop", { tier: Tier.READ, words: ["stop", "pause"] }) : choice("play", "Play", { tier: Tier.READ, words: ["play", "yes", "play it"] }), back,
+        ], { announce: `${x.title}. About ${Math.max(1, Math.round(x.clip.durationSec / 60))} min.`, known: [...known, ["Length", `${x.clip.durationSec} seconds`]], contentLang: x.clip.lang,
+          sections: [section("What it says", [x.clip.script], { lang: x.clip.lang })], secondary: [homeBtn()] });
+      }
+      const q = x.quiz;
+      return makeStep("ws_item", Flow.WORKSPACE, "Quiz", "Anything else?", [back], {
+        announce: `${x.title}. What it checks: ${q.checks}`, known: [...known, ["Questions", `${q.questions.length}`]], contentLang: q.lang, secondary: [homeBtn()],
+        sections: q.questions.map((y, i) => section(`Question ${i + 1}`, [y.q, ...y.options.map((o, k) => k === y.answer ? `${o} (correct answer)` : o)], { lang: q.lang })) });
+    }
 
     case "awaiting": {
       const items = [];

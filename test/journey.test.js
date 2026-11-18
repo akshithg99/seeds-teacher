@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { Engine, Store } from "../js/engine.js";
 import { ContentGenerator } from "../js/generator.js";
 import { Claude } from "../js/claude.js";
-import { Source, spoken, splitLang, inLang, stripLang } from "../js/step.js";
+import { Source, Flow, spoken, splitLang, inLang, stripLang } from "../js/step.js";
 import { match, opening } from "../js/matcher.js";
 import { TikTabs } from "../js/tiktabs.js";
 import { Curriculum } from "../js/data.js";
@@ -246,4 +246,44 @@ test("Home offers to carry on a half-planned lesson", async () => {
   assert.deepEqual(match("yes", e.step, null), { type: "choose", choiceId: "resume_plan" }); // a teacher can just agree
   await choose("resume_plan");
   assert.equal(id(), "plan_tik_source"); // back where they left off
+});
+
+test("Workspace lists Content Studio items and the teacher's own, and opens each", async () => {
+  await choose("no");
+  // voice and menu both reach it
+  assert.deepEqual(match("my workspace", e.step, null), { type: "goto", flow: Flow.WORKSPACE });
+  await e.goTo(Flow.WORKSPACE, Source.BUTTON);
+  assert.equal(id(), "workspace");
+  const syncedTiks = Curriculum.chapters.filter((c) => c.syncedTik).length;
+  const syncedAudio = Curriculum.chapters.flatMap((c) => c.topics).filter((t) => t.syncedAudio).length;
+  assert.equal(e.step.sections[0].lines[0], `${syncedTiks} TIKs, ${syncedAudio} audio, 0 quizzes`);
+  assert.equal(e.step.sections[1].lines[0], "0 TIKs, 0 audio, 0 quizzes");
+  assert.equal(e.step.choices.find((c) => c.id === "quizzes").enabled, false); // nothing to open yet
+
+  // a Content Studio TIK opens as tabs, read-only
+  await choose("tiks");
+  assert.equal(id(), "ws_list");
+  await choose(e.step.choices[0].id);
+  assert.equal(id(), "ws_item");
+  assert.ok(e.step.tik);
+  assert.deepEqual(e.step.choices.map((c) => c.id), ["ws_back"]); // no edit from here
+  await choose("ws_back");
+
+  // Content Studio audio can be played
+  await choose("ws_home"); await choose("audio"); await choose(e.step.choices[0].id);
+  assert.equal(e.step.title, "Audio");
+  await choose("play");
+  assert.ok(e.audio.isPlaying());
+  await choose("ws_back");
+  assert.equal(e.audio.isPlaying(), false); // leaving stops it
+
+  // a TIK the teacher drafts shows up as theirs, not approved yet
+  await choose("home"); await choose("plan"); await choose("c6"); await choose("6-magnets"); await choose("6-magnets-2"); await choose("yes");
+  await choose(e.step.choices.find((c) => /English/.test(c.label)).id, true);
+  await choose("use_as_is"); await choose("topic");
+  await e.submitText("12 students", Source.BUTTON);
+  await e.goTo(Flow.WORKSPACE, Source.BUTTON);
+  assert.equal(e.step.sections[1].lines[0], "1 TIK, 0 audio, 0 quizzes");
+  await choose("tiks");
+  assert.ok(e.step.sections[1].lines.some((x) => /Poles of a magnet: topic TIK · Not approved yet/.test(x)));
 });

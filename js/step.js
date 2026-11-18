@@ -13,6 +13,7 @@ export const Flow = {
   TEACH: { key: "TEACH", label: "Teaching", words: ["teach", "start class", "teaching", "class"] },
   QUIZ: { key: "QUIZ", label: "Assessment/Quiz", words: ["quiz", "assessment", "test"] },
   FOLLOWUP: { key: "FOLLOWUP", label: "Post class feedback and remediation", words: ["follow up", "follow-up", "followups", "remediation", "class record", "records", "feedback"] },
+  WORKSPACE: { key: "WORKSPACE", label: "Workspace", words: ["workspace", "my workspace", "my content", "all my content", "my tiks", "my audio", "my quizzes", "library"] },
   SETUP: { key: "SETUP", label: "Getting set up", words: [] },
 };
 export const FLOWS = Object.values(Flow);
