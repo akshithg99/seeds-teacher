@@ -531,6 +531,8 @@ export class Engine {
   }
 
   planningDone(l) { return this.nextPlanningStep(l) === "lesson_saved"; }
+  /** The latest lesson still being planned (not ready, not taught), so Home can offer to carry on with it. */
+  unfinishedLesson() { return [...this.st.lessons].reverse().find((l) => !this.taught(l) && !this.ready(l) && !this.planningDone(l)) || null; }
 
   nextPlanningStep(l) {
     if (!l.tik) return "plan_tik_source";
@@ -712,6 +714,7 @@ export class Engine {
           case "setup_week": d.pendingEntries = []; this.go("sched_class"); return "Your schedule tells the app which class, chapter and topic comes next, so you don't have to say them each time.";
           case "schedule": this.go(this.st.schedule.length ? "sched_view" : "sched_class"); break;
           case "plan": d.clearPlanning(); this.go("plan_class"); break;
+          case "resume_plan": { const l = this.unfinishedLesson(); if (l) { d.clearPlanning(); d.lessonId = l.id; this.go(this.nextPlanningStep(l)); } break; }
           case "next_topic": this.go("next_class"); break;
           case "teach_pick": this.go("teach_pick"); break;
           case "awaiting": this.go("awaiting"); break;

@@ -233,3 +233,17 @@ test("the agent talks in plain words, never a numbered menu", async () => {
   assert.match(spoken(e.step), /^You have 1 lesson ready to teach\. /);
   void Offline;
 });
+
+test("Home offers to carry on a half-planned lesson", async () => {
+  await choose("no");
+  await choose("plan"); await choose("c6"); await choose("6-magnets"); await choose(e.step.choices[0].id); await choose("yes");
+  await choose(e.step.choices.find((c) => /English/.test(c.label)).id, true);
+  assert.equal(id(), "plan_tik_source");
+  await e.goHome();
+  assert.equal(id(), "home");
+  assert.deepEqual(e.step.choices.map((c) => c.id), ["resume_plan", "plan", "menu"]);
+  assert.match(e.step.announce, /You were planning Class 6 Science, Exploring Magnets/);
+  assert.deepEqual(match("yes", e.step, null), { type: "choose", choiceId: "resume_plan" }); // a teacher can just agree
+  await choose("resume_plan");
+  assert.equal(id(), "plan_tik_source"); // back where they left off
+});

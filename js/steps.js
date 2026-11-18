@@ -614,12 +614,16 @@ function homeStep(e) {
       sections.push(section("Ready to teach", ready.map((x) => e.lessonName(x)), { emphasis: !active }));
       choices.push(choice("teach_pick", "Teach a ready lesson", { words: ["teach"] }));
     }
-    if (!st.lessons.length && !st.sessions.length) {
-      sections.push(section("No lessons yet", ["Set up your week, or plan a lesson."]));
-      choices.push(choice("next_topic", "What should I teach next?", { words: ["what should i teach", "teach next", "lesson plan", "what is my lesson plan"] }));
-      choices.push(choice("setup_week", "Set up my week", { words: ["set up", "schedule", "my week"] }));
-      choices.push(choice("plan", "Plan a lesson", { words: ["plan"] }));
+    const todo = e.unfinishedLesson();
+    if (todo) {
+      sections.push(section("Being planned", [e.lessonName(todo)], { emphasis: !active && !ready.length }));
+      choices.push(choice("resume_plan", "Carry on planning", { words: ["carry on", "carry on planning", "continue planning", "finish planning", "finish it"] }));
     }
+    if (!st.lessons.length && !st.sessions.length) sections.push(section("No lessons yet", ["Set up your week, or plan a lesson."]));
+    // Home always offers a way forward, whatever state the lessons are in
+    if (!todo && !ready.length) choices.push(choice("next_topic", "What should I teach next?", { words: ["what should i teach", "teach next", "lesson plan", "what is my lesson plan"] }));
+    if (!todo && !ready.length) choices.push(choice("setup_week", "Set up my week", { words: ["set up", "schedule", "my week"] }));
+    choices.push(choice("plan", "Plan a lesson", { words: ["plan"] }));
   }
   const waiting = [];
   const n1 = st.lessons.filter((x) => x.tikState === "DRAFT").length; if (n1) waiting.push(`${n1} ${n1 === 1 ? "TIK" : "TIKs"} waiting for approval`);
@@ -629,7 +633,7 @@ function homeStep(e) {
   const n5 = st.patterns.filter((p) => p.state === "Proposed").length; if (n5) waiting.push(`${n5} follow-up ${n5 === 1 ? "suggestion" : "suggestions"}`);
   if (waiting.length) { sections.push(section("Waiting for you", waiting)); choices.push(choice("awaiting", "Review waiting items", { words: ["waiting", "review", "approval"] })); }
   // the first action answers "yes" to the question Home asks, so a teacher can just agree (FR-62, FR-87)
-  if (choices[0] && ["continue", "start_next", "prepare_next"].includes(choices[0].id)) choices[0] = { ...choices[0], words: [...choices[0].words, "yes", "okay", "sure", "let's do it"] };
+  if (choices[0] && ["continue", "start_next", "prepare_next", "resume_plan"].includes(choices[0].id)) choices[0] = { ...choices[0], words: [...choices[0].words, "yes", "okay", "sure", "let's do it"] };
   const primary = [...choices.filter((c, i) => choices.findIndex((x) => x.id === c.id) === i).slice(0, 3), choice("menu", "More options", { words: ["more", "more options", "menu"] })];
   // spoken like a colleague catching you up, not a list of headings
   const talk = [];
@@ -645,6 +649,8 @@ function homeStep(e) {
     const ready = st.lessons.filter((x) => e.ready(x) && !e.taught(x)).length;
     if (ready) talk.push(`You have ${plural(ready, "lesson", "lessons")} ready to teach.`);
     else if (!st.lessons.length) talk.push("You don't have any lessons yet. I can help you set up your week, or plan a lesson.");
+    const todo = e.unfinishedLesson();
+    if (todo && !ready) { talk.push(`You were planning ${e.lessonName(todo)}.`); question = "Shall we carry on with it?"; }
   }
   if (waiting.length) talk.push(`You ${talk.some((x) => !x.startsWith("Hello")) ? "also " : ""}have ${orList(waiting.map((w) => w.replace(/ waiting for approval$/, " to approve"))).replace(/ or ([^,]*)$/, " and $1")}.`);
   return makeStep("home", Flow.HOME, "Home", question, primary, { announce: talk.join(" ") || null, sections,
