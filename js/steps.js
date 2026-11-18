@@ -316,7 +316,7 @@ export function buildStep(e) {
     case "qs_change":
       return makeStep("qs_change", Flow.PLAN, "Change the questions", "What should I change in the questions?", [choice("back", "Back to the questions")], {
         known: lessonKnown, progress: planProgress(2), freeSpeech: { prompt: "For example: make the questions easier, or fewer questions", longWindow: true },
-        help: e.gen.online ? null : "Without a Claude key I understand: easier, harder, fewer questions, more questions." });
+        help: e.gen.online ? null : "I understand: easier, harder, fewer questions, more questions." });
 
     // ======================================================== F5 Prepare audio
     case "audio_offer":

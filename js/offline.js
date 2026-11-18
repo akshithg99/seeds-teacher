@@ -206,7 +206,7 @@ export function revise(t, request) {
 }
 
 /** Words the offline reviser understands, said back when a request is not understood. */
-export const REVISE_HINT = "Without a Claude key I understand: pairs, groups, shorter, simpler, more examples, levels, touch, remove step 2, add discussion.";
+export const REVISE_HINT = "I understand: pairs, groups, shorter, simpler, more examples, levels, touch, remove step 2, add discussion.";
 
 // ---------------------------------------------------------------- questions, audio, quiz
 

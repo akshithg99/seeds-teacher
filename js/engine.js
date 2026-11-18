@@ -140,13 +140,13 @@ export class Engine {
   langNote(classNum, actual, synced = false) {
     const want = this.classLang(classNum);
     if (!want || !actual || want === actual) return "";
-    return synced ? ` Content Studio has it in ${actual} only, not ${want}.` : ` It is in ${actual}, because without a Claude key drafts are in English only.`;
+    return actual === "English" ? " There is only English support." : ` It is in ${actual}.`;
   }
   /** Said before generating (FR-109): which language the draft will be in. */
   prepLine(classNum) {
     const want = this.classLang(classNum);
     if (!want || want === "English") return null;
-    return this.gen.online ? `I'll prepare it in ${want}.` : `Without a Claude key I can prepare it in English only, not ${want}.`;
+    return this.gen.online ? `I'll prepare it in ${want}.` : "There is only English support.";
   }
 
   // ------------------------------------------------------------------ account (F1)
@@ -747,7 +747,7 @@ export class Engine {
         const c2 = d.langFor;
         this.setClassLang(c2, c);
         const next = d.langNext; d.langFor = null; d.langNext = null;
-        const said = `Class ${c2} is taught in ${c}.` + (c !== "English" && !this.gen.online ? " Without a Claude key, drafts are prepared in English only." : "");
+        const said = `Class ${c2} is taught in ${c}.` + (c !== "English" && !this.gen.online ? " There is only English support." : "");
         if (next === "__plan") { this.continuePlan(); return said; }
         this.go(next || "home");
         return said;
@@ -1273,7 +1273,7 @@ export class Engine {
         const t = await this.working("Applying your change…", () => this.gen.reviseTik(ch, base, text, this.classLang(l.classNum)));
         if (!t) return this.failed("apply the change");
         // Offline, an unrecognised request comes back unchanged: say so, never pretend (error recovery)
-        if (t === base || same(t, base)) return "I couldn't apply that change without a Claude key. " + Offline.REVISE_HINT;
+        if (t === base || same(t, base)) return "I couldn't apply that change. " + Offline.REVISE_HINT;
         this.draft.changeCount++;
         // BR-15: editing returns the TIK to unapproved and its question sets to not reviewed
         this.updateLesson(l.id, (x) => ({ ...x, tik: t, tikState: "DRAFT", tikBefore: base, questionSets: x.questionSets.map((q) => ({ ...q, approved: false })) }));
@@ -1285,7 +1285,7 @@ export class Engine {
       case "qs_change": {
         let out = await this.working("Updating the questions…", async () => (await this.gen.reviseQuestions(this.chapterOf(l), this.topicOf(l), l.tik, l.questionSets, text, this.classLang(l.classNum))) || []);
         if (!out) return this.failed("update the questions");
-        if (!out.length) return "I couldn't apply that without a Claude key. Try: easier, harder, fewer or more questions.";
+        if (!out.length) return "I couldn't apply that. Try: easier, harder, fewer or more questions.";
         this.draft.changeCount++;
         this.updateLesson(l.id, (x) => ({ ...x, questionSets: out }));
         if (this.draft.changeCount % 3 === 0) { this.draft.checkpointFor = "qs"; this.go("checkpoint"); return "Questions updated."; }

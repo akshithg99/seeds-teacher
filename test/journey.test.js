@@ -61,14 +61,15 @@ test("full journey, offline", async () => {
   assert.equal(id(), "plan_confirm");
   await choose("yes"); // language already known: no second ask
   assert.equal(id(), "plan_tik_source"); // synced chapter TIK offered first (BR-11)
-  assert.match(e.step.announce, /English only, not Hindi/); // FR-111: says which language it falls back to
+  assert.match(e.step.announce, /There is only English support./); // FR-111: says it falls back to English
   await choose("use_as_is");
   assert.equal(id(), "plan_tik_mode");
   await choose("topic");
   assert.equal(id(), "plan_need");
-  assert.match(e.step.announce, /English only, not Hindi/); // FR-109: says the language before generating
+  assert.match(e.step.announce, /There is only English support./); // FR-109: says the language before generating
   const r = await e.submitText("12 students, mixed levels, we have ring magnets", Source.BUTTON);
-  assert.match(r, /in English, because without a Claude key/);
+  assert.match(r, /There is only English support./);
+  assert.doesNotMatch(r, /Claude key/);
   assert.equal(id(), "tik_review");
   assert.equal(e.lesson().tikState, "DRAFT");
   assert.ok(e.step.banner);
