@@ -28,6 +28,23 @@ Phones only allow the microphone on an `https://` address, so `http://<laptop-ip
 - **GitHub Pages**: push the folder to a repository, then go to Settings → Pages → Deploy from branch. On a free account the repository must be public.
 - **Netlify Drop**: drag the `seeds-web` folder onto app.netlify.com/drop. Without an account the site is removed after an hour. With a free account it stays.
 
+## Versions for testing
+
+The live site shows the `main` branch. Each test version is a branch with its own public repo named `seeds-teacher-<version>`, at `https://akshithg99.github.io/seeds-teacher-<version>/`. `dev` goes to `seeds-teacher-preview`.
+
+To add a version, for example `voice-a`:
+
+```bash
+git switch -c voice-a dev
+git remote add voice-a https://github.com/akshithg99/seeds-teacher-voice-a.git
+git push -u origin voice-a
+git push voice-a voice-a:main
+```
+
+Create the repo on GitHub first. After the first push, turn on Settings → Pages → Deploy from branch → `main`.
+
+Each version site reads its name from its address. It shows "Preview: voice-a" in the top bar and keeps its own sign-in, settings and Claude key, apart from the live site and other versions. To make a version live, merge its branch into `main`.
+
 ## Which browsers
 
 | | Buttons | Voice guide (listening) | Voice guide (speaking) |

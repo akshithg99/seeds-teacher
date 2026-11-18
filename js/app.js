@@ -9,8 +9,11 @@ import { mountUI } from "./ui.js";
 const safe = (get) => { try { const s = get(); const k = "__seeds_probe"; s.setItem(k, "1"); s.removeItem(k); return s; } catch { return null; } };
 const local = safe(() => window.localStorage);
 const session = safe(() => window.sessionStorage);
-// The preview site shares the live site's origin (akshithg99.github.io), so it keeps its own keys.
-const NS = location.pathname.includes("-preview") ? "_preview" : "";
+// Each version site is its own repo, seeds-teacher-<version>, on the live site's origin (akshithg99.github.io),
+// so it keeps its own keys. The live site (/seeds-teacher/) and localhost keep the plain keys.
+const site = location.pathname.split("/")[1] || "";
+const version = site.startsWith("seeds-teacher-") ? site.slice("seeds-teacher-".length) : "";
+const NS = version ? "_" + version : "";
 const KEY_KEY = "seeds_claude_key" + NS, STATE_KEY = "seeds_state_v1" + NS, SESSION_KEY = "seeds_session" + NS;
 
 const store = new Store(local, STATE_KEY);
@@ -30,7 +33,7 @@ const voice = new VoiceOrchestrator(engine, brain, new SpeechIn(), output, new E
 player.onChange = () => engine.refresh();
 
 mountUI({
-  engine, voice, claude, player, preview: !!NS,
+  engine, voice, claude, player, version,
   setSession: (remember) => { if (session) { if (remember) session.removeItem(SESSION_KEY); else session.setItem(SESSION_KEY, "1"); } },
   /** Saves the key only if Claude accepts it. Returns null on success, else a plain message. */
   saveKey: async (key) => {

@@ -30,7 +30,7 @@ const lc = (lang) => (lang && lang !== "English" ? langCode(lang) : null);
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "");
 export const SHORTCUT_TEXT = "Ctrl + Shift + Space";
 
-export function mountUI({ engine, voice, claude, player, saveKey, removeKey, clearData, setSession, preview = false }) {
+export function mountUI({ engine, voice, claude, player, saveKey, removeKey, clearData, setSession, version = "" }) {
   const app = document.getElementById("app");
   const ui = { navOpen: false, freeText: "", feedback: "", feedbackTimer: null, lastStepId: null, lastSignedIn: null, signInErr: "", showPw: false };
 
@@ -38,8 +38,9 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   const voiceEl = h("section", { class: "voice", "aria-label": "Voice guide" });
   const topEl = h("header", { class: "topbar" });
   // Testers must be able to tell the preview site from the live one at a glance.
-  const badge = () => preview ? h("span", { class: "badge" }, "Preview") : null;
-  if (preview) document.title = "Preview: " + document.title;
+  const badgeText = !version ? "" : version === "preview" ? "Preview" : `Preview: ${version}`;
+  const badge = () => badgeText ? h("span", { class: "badge" }, badgeText) : null;
+  if (badgeText) document.title = `${badgeText} · ${document.title}`;
   const navEl = h("nav", { "aria-label": "Feature flows", id: "nav" });
   const mainEl = h("main", { class: "shell", id: "main" });
   const fbEl = h("div", { class: "feedback", role: "status", "aria-live": "polite" });
