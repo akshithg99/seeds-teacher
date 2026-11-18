@@ -27,7 +27,7 @@ const ICON = {
   home: '<path d="M4 11l8-6.5 8 6.5V20h-5.5v-5.5h-5V20H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   week: '<rect x="4" y="5.5" width="16" height="14.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   records: '<path d="M15.5 4.5l4 4L9 19H5v-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
-  help: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 9.6a2.5 2.5 0 114 2c-.9.6-1.6 1.1-1.6 2.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor"/>',
+  workspace: '<path d="M4 7.5L12 4l8 3.5-8 3.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12l8 3.5 8-3.5M4 16.5L12 20l8-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   speaker: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   dots: '<circle cx="6" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/>',
 };
@@ -120,7 +120,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
         tab("Today", ICON.home, () => goFlow(Flow.HOME), flow === Flow.HOME),
         tab("Week", ICON.week, () => goFlow(Flow.SCHEDULE), flow === Flow.SCHEDULE),
         tab("Records", ICON.records, () => goFlow(Flow.FOLLOWUP), flow === Flow.FOLLOWUP),
-        tab("Help", ICON.help, onHelp, false),
+        tab("Workspace", ICON.workspace, () => goFlow(Flow.WORKSPACE), flow === Flow.WORKSPACE),
       ] : null));
     fit();
   }
