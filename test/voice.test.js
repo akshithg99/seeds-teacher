@@ -5,7 +5,7 @@ import { Engine, Store } from "../js/engine.js";
 import { ContentGenerator } from "../js/generator.js";
 import { Claude } from "../js/claude.js";
 import { Source } from "../js/step.js";
-import { VoiceOrchestrator, SentenceChunker } from "../js/voice.js";
+import { VoiceOrchestrator, SentenceChunker, SpeechOut } from "../js/voice.js";
 
 const noop = () => {};
 let e, v, out, brain;
@@ -111,4 +111,25 @@ test("streamed text is spoken sentence by sentence", () => {
   assert.deepEqual(c.push("Done. Now say"), ["Done."]);
   assert.deepEqual(c.push(" 1, Approve. "), ["Now say 1, Approve."]);
   assert.equal(c.flush(), null);
+});
+
+test("Speech: a voice the phone lacks is retried in the phone's default voice, and silence is reported", async () => {
+  const spoken = [];
+  class U { constructor(text) { this.text = text; } }
+  // a phone whose engine fails any utterance that names a language or voice
+  globalThis.SpeechSynthesisUtterance = U;
+  globalThis.window = { speechSynthesis: { paused: false, getVoices: () => [], cancel() {}, resume() {},
+    speak(u) { setTimeout(() => { if (u.lang || u.voice) u.onerror({ error: "language-unavailable" }); else { spoken.push(u.text); u.onstart(); u.onend(); } }, 0); } } };
+  try {
+    const so = new SpeechOut();
+    await new Promise((done) => so.say("Hello there. Shall we start?", done));
+    assert.deepEqual(spoken, ["Hello there.", "Shall we start?"]);
+    assert.equal(so.spoke, true);
+    assert.equal(so.lastError, "language-unavailable");
+    // a phone that plays nothing at all: the orchestrator says so on screen
+    window.speechSynthesis.speak = (u) => setTimeout(() => u.onerror({ error: "synthesis-failed" }), 0);
+    v.output = so;
+    await new Promise((done) => { so.say("Hi.", () => { v.afterSpeaking(); done(); }); });
+    assert.match(v.turnInfo, /didn't play my reply \(synthesis-failed\)/);
+  } finally { delete globalThis.window; delete globalThis.SpeechSynthesisUtterance; }
 });

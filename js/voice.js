@@ -100,7 +100,7 @@ export class SpeechOut {
   get available() { return !!synth(); }
 
   say(text, onDone) { this.stop(); this.begin(onDone); this.enqueue(text); this.end(); }
-  begin(onDone) { this.token++; this.onDone = onDone; this.pending = 0; this.ended = false; this.warned = new Set(); }
+  begin(onDone) { this.token++; this.onDone = onDone; this.pending = 0; this.ended = false; this.warned = new Set(); this.spoke = false; this.lastError = null; }
   enqueue(text) {
     const s = synth();
     if (!s) return;
@@ -113,19 +113,34 @@ export class SpeechOut {
       sentences(part.text).forEach((x) => this.utter(x, part.lang ? v : voiceFor("English"), part.lang));
     }
   }
-  utter(text, voice, lang) {
+  /** plain: English with no voice or language set, so the phone's own default voice reads it. */
+  utter(text, voice, lang, plain = false) {
     const s = synth(), my = this.token;
     // said the way a person would: "Start (5 min):" -> "Start, 5 minutes:"
     const u = new SpeechSynthesisUtterance(text.replace(/\s*\((\d+) min\)/g, ", $1 minutes,").replace(/ · /g, ", "));
-    if (voice) u.voice = voice;
-    u.lang = voice ? voice.lang : langCode(lang || "English");
+    if (!plain) {
+      if (voice) u.voice = voice;
+      u.lang = voice ? voice.lang : langCode(lang || "English");
+    }
     u.rate = this.rate;
     this.pending++;
-    let fired = false;
+    let fired = false, dog;
     const done = () => { if (fired) return; fired = true; clearTimeout(dog); if (my !== this.token) return; this.pending--; this.check(); };
-    // some browsers never fire onend; move on after a generous estimate
-    const dog = setTimeout(done, 4000 + (text.split(/\s+/).length * 700) / this.rate);
-    u.onend = done; u.onerror = done;
+    const arm = (ms) => { clearTimeout(dog); dog = setTimeout(done, ms); };
+    // Android phones can take seconds to start a sentence. Timing it from the call let the agent start listening
+    // while it had not yet spoken, and the microphone then cut the speech off. Time it from its start instead.
+    arm(15000);
+    u.onstart = () => { this.spoke = true; arm(4000 + (text.split(/\s+/).length * 700) / this.rate); };
+    u.onend = done;
+    u.onerror = (ev) => {
+      if (my === this.token && ev.error !== "interrupted" && ev.error !== "canceled") {
+        this.lastError = ev.error || "error";
+        // the chosen voice or "en-IN" may not be on this phone: try English once more in the phone's default voice
+        if (!plain && !lang) this.utter(text, null, null, true);
+      }
+      done();
+    };
+    if (s.paused) s.resume(); // Android can leave the speech queue paused
     s.speak(u);
   }
   /** A short spoken note while working. It sits in the speech queue ahead of the reply and is cut off by stop(). */
@@ -477,6 +492,10 @@ export class VoiceOrchestrator {
 
   afterSpeaking() {
     this.vad.stop();
+    // shown on screen so a silent phone says why, instead of failing quietly
+    if (this.output.available && !this.output.spoke) {
+      this.set({ turnInfo: `Voice: this device didn't play my reply${this.output.lastError ? ` (${this.output.lastError})` : ""}. Check the media volume, and that a text-to-speech voice is installed in the phone's settings.` });
+    }
     const e = this.engine, step = e.step;
     const follow = this.awake && (this.forceListen || !!e.pending || (e.voiceGuideOn && !step.inClass && step.choices.length > 0));
     this.forceListen = false;
