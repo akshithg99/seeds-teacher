@@ -95,8 +95,8 @@ test("tabs parse and change summary", () => {
 
 async function openSyncedTik() {
   await go("plan", "c6", "6-magnets", "6-magnets-2", "yes");
-  assert.equal(id(), "plan_tik_source");
-  await go("check");
+  assert.equal(id(), "plan_review");
+  await go("tik");
   assert.equal(id(), "tik_view");
 }
 
@@ -128,7 +128,8 @@ test("apply suggestions shows what changed, and undo restores", async () => {
   const u = e.undo(Source.BUTTON);
   assert.ok(u.startsWith("Undone: Apply suggested changes."), u);
   assert.equal(id(), "tik_view");
-  assert.equal(e.lesson().tik, null);
+  assert.deepEqual(e.lesson().tik, magnets.syncedTik); // back to Content Studio's TIK, used as it is
+  assert.equal(e.lesson().tikState, "SYNCED_IN_USE");
   assert.equal(e.undoPoint, null);
 });
 
@@ -167,19 +168,20 @@ test("destructive schedule actions ask first", async () => {
 
 test("Course questions can be used as they are, with no approval (FR-111)", async () => {
   await openSyncedTik();
-  await go("use_as_is", "chapter", "prepare");
+  await go("use_as_is");
   assert.equal(id(), "qs_review");
   await go("use_course");
   const sets = e.lesson().questionSets;
   assert.ok(sets.every((s) => s.approved && s.discussion.length === 0 && s.check.length === Math.max(1, s.fromCourse)));
-  assert.equal(id(), "audio_offer");
+  assert.equal(id(), "audio_review");
 });
 
 test("audio that cannot play falls back to teacher-led in one step (FR-38)", async () => {
   e.audio = { ...noAudio, play: () => false };
   await openSyncedTik();
-  await go("use_as_is", "chapter", "skip", "prepare");
-  await e.choose("approve", Source.BUTTON, true);
+  await go("use_as_is");
+  await e.choose("approve", Source.BUTTON, true); // questions
+  await e.choose("approve", Source.BUTTON, true); // audio
   await go("open", "start", "audio");
   assert.equal(id(), "audio_player");
   await go("toggle");

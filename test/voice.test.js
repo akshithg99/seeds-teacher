@@ -75,10 +75,30 @@ test("waking greets, then listens; work in progress is said aloud", async () => 
   assert.equal(out.said.at(-1), "Yes, how can I help?");
   // a voice request that prepares something says what it is doing
   await e.choose("plan", Source.BUTTON); await e.choose("c6", Source.BUTTON); await e.choose("6-magnets", Source.BUTTON); await e.choose("6-magnets-2", Source.BUTTON);
-  e.setClassLang(6, "English"); await e.choose("yes", Source.BUTTON); await e.choose("use_as_is", Source.BUTTON); await e.choose("topic", Source.BUTTON);
+  e.setClassLang(6, "English"); await e.choose("yes", Source.BUTTON); await e.choose("topic_tik", Source.BUTTON);
   await v.handle("skip");
   assert.deepEqual(out.notes, ["Preparing your lesson plan."]);
   assert.equal(e.step.id, "tik_review");
+});
+
+test("one request and one yes plan the whole lesson, then the teacher reviews it", async () => {
+  e.setClassLang(7, "English");
+  v.awake = true;
+  await v.handle("Plan Class 7 Science for Thursday");
+  assert.equal(e.step.id, "plan_confirm");
+  assert.match(out.said.at(-1), /^Class 7, science, Thursday[.] .*Start with chapter 1, Nutrition in Plants, topic [^?]+[?]$/);
+  await v.handle("yes");
+  assert.equal(e.step.id, "plan_review");
+  assert.ok(out.notes.includes("Preparing your lesson."));
+  assert.equal(out.said.at(-1), "Ready. Please review your lesson. Shall we go through it now?");
+  const l = e.lesson();
+  assert.ok(l.tik && l.questionSets.length && l.audio.length, "TIK, questions and audio are all prepared");
+  // "yes" again goes through them one by one, starting with the TIK draft
+  await v.handle("yes");
+  assert.equal(e.step.id, "tik_review");
+  // "no" to the offered chapter keeps the class and asks for the chapter
+  await v.handle("Plan Class 7 Science for Thursday"); await v.handle("no");
+  assert.equal(e.step.id, "plan_chapter");
 });
 
 test("buttons never start the agent, even with the voice guide on", async () => {

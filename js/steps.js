@@ -257,11 +257,30 @@ export function buildStep(e) {
       const chx = Curriculum.chapter(d.chapterId), tpx = Curriculum.topic(d.topicId);
       const sched = st.schedule.find((x) => x.id === d.scheduleId);
       return makeStep("plan_confirm", Flow.PLAN, "Your lesson",
-        `Class ${chx && chx.classNum} science, chapter ${chx && chx.number}, ${chx && chx.name}, topic ${tpx && tpx.name}. Is that right?`,
+        `Start with chapter ${chx && chx.number}, ${chx && chx.name}, topic ${tpx && tpx.name}?`,
         [choice("yes", "Yes, continue", { words: ["yes", "right", "correct", "continue"] }), choice("change", "Change something", { words: ["no", "change"] })],
         { known: [["Class", `${chx && chx.classNum}`], ["Subject", "Science"], ["Chapter", `${chx && chx.number}. ${chx && chx.name}`], ["Topic", `${tpx && tpx.name}`],
           ...(sched ? [["From your schedule", `${sched.day}, period ${sched.period}`]] : []), ...(chx && e.classLang(chx.classNum) ? [["Language", e.classLang(chx.classNum)]] : [])],
           progress: planProgress(0) });
+    }
+
+    // everything prepared in one go: the teacher reviews it all in a row, or opens one piece
+    case "plan_review": {
+      const sets = (l && l.questionSets) || [], clips = (l && l.audio) || [];
+      const tikStatus = !l || !l.tik ? "Not prepared" : { APPROVED: "Approved", SYNCED_IN_USE: "From Content Studio, used as it is" }[l.tikState] || "Not approved yet";
+      const todo = !!l && !e.planningDone(l);
+      return makeStep("plan_review", Flow.PLAN, "Review your lesson", todo ? "Shall we go through it now?" : "Everything is approved. Finish?", [
+        choice("review", todo ? "Review everything" : "Finish", { words: ["yes", "review", "review everything", "go through it", "finish"] }),
+        choice("tik", "Open the TIK", { words: ["tik", "the tik", "open the tik"], enabled: !!(l && l.tik), whyDisabled: "No TIK yet." }),
+        choice("questions", "Open the questions", { words: ["questions", "the questions", "open the questions"], enabled: sets.length > 0, whyDisabled: "No questions yet." }),
+        choice("audio", "Open the audio", { words: ["audio", "the audio", "open the audio"], enabled: clips.length > 0, whyDisabled: "No audio yet." }),
+        ...(l && l.tik && l.tik.scope === "chapter" ? [choice("topic_tik", "Make a topic TIK for my class", { words: ["topic tik", "make a topic tik", "for my class"] })] : []),
+      ], { announce: todo ? "Ready. Please review your lesson." : "Your lesson is ready.", known: lessonKnown, progress: planProgress(1), secondary: [homeBtn("Later")],
+        sections: [
+          section("TIK", [l && l.tik ? `${l.tik.scope === "topic" ? "Topic" : "Chapter"} TIK · ${tikStatus}` : tikStatus]),
+          section("Questions", [sets.length ? `${plural(sets.length, "set", "sets")}, for the overview and ${tp && tp.name} · ${sets.every((s) => s.approved) ? "Approved" : "Not approved yet"}` : l && l.questionsSkipped ? "Skipped" : "Not prepared"]),
+          section("Audio", clips.length ? clips.map((a) => `${a.name} · ${a.provenance.startsWith("Synced") ? "from Content Studio" : "made for this lesson"} · ${a.approved ? "Approved" : "Not approved yet"}`) : [l && l.tikOnly ? "TIK only, no audio" : "Not prepared"]),
+        ] });
     }
 
     case "plan_previous":

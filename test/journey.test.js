@@ -59,12 +59,15 @@ test("full journey, offline", async () => {
   assert.ok(e.step.choices.some((c) => c.id === "prepare_next"));
   await choose("prepare_next");
   assert.equal(id(), "plan_confirm");
-  await choose("yes"); // language already known: no second ask
-  assert.equal(id(), "plan_tik_source"); // synced chapter TIK offered first (BR-11)
-  assert.match(e.step.announce, /There is only English support./); // FR-111: says it falls back to English
-  await choose("use_as_is");
-  assert.equal(id(), "plan_tik_mode");
-  await choose("topic");
+  // one yes prepares the whole lesson (language already known: no second ask); nothing is approved yet
+  const prepared = await choose("yes");
+  assert.equal(id(), "plan_review");
+  assert.match(prepared, /There is only English support./); // FR-111: says it falls back to English
+  assert.equal(e.step.announce, "Ready. Please review your lesson.");
+  assert.equal(e.lesson().tikState, "SYNCED_IN_USE"); // Content Studio's TIK used as it is (BR-11)
+  assert.ok(e.lesson().questionSets.length && e.lesson().audio.length);
+  assert.ok(!e.lesson().questionSets.some((q) => q.approved) && !e.lesson().audio.some((a) => a.approved));
+  await choose("topic_tik");
   assert.equal(id(), "plan_need");
   assert.match(e.step.announce, /There is only English support./); // FR-109: says the language before generating
   const r = await e.submitText("12 students, mixed levels, we have ring magnets", Source.BUTTON);
@@ -80,12 +83,8 @@ test("full journey, offline", async () => {
   await e.confirmPending(Source.VOICE, "approve");
   assert.equal(e.lesson().tikState, "APPROVED");
 
-  assert.equal(id(), "qs_offer");
-  await choose("prepare");
-  assert.equal(id(), "qs_review");
+  assert.equal(id(), "qs_review"); // reviewing carries on to the next piece
   await choose("approve", true);
-  assert.equal(id(), "audio_offer");
-  await choose("prepare");
   assert.equal(id(), "audio_review");
   await choose("approve", true);
   assert.equal(id(), "lesson_saved");
@@ -162,7 +161,9 @@ test("opening request fills details and asks only what is missing", async () => 
   await choose("no");
   const r = await e.fillDetails("plan", 7, "Thursday", null, null, null, Source.VOICE);
   assert.ok(r.startsWith("Class 7, science, Thursday"), r);
-  assert.equal(id(), "plan_chapter"); // nothing scheduled on Thursday, so it asks for the chapter
+  // nothing scheduled on Thursday, so it offers where the class is up to, as one yes-or-no question
+  assert.equal(id(), "plan_confirm");
+  assert.match(r, /Thursday isn't on your schedule yet\. Start with chapter 1, Nutrition in Plants, topic [^?]+\?$/);
 });
 
 test("matcher: numbers, commands, opening", async () => {
@@ -217,7 +218,7 @@ test("the agent talks in plain words, never a numbered menu", async () => {
   // a question that already names its choices is not followed by a list
   await choose("c6"); await choose("6-magnets"); await choose("6-magnets-2"); await choose("yes");
   await choose("English", true);
-  assert.equal(spoken(e.step), "Synced from Content Studio. A TIK is ready for this chapter. Use it as it is, or open it and check it?");
+  assert.equal(spoken(e.step), "Ready. Please review your lesson. Shall we go through it now?");
   // a suggestion is offered first, and "yes" takes it
   e.fillDetails("next", null, null, null, null, null, Source.VOICE);
   await choose("c6"); await choose("other");
@@ -228,24 +229,27 @@ test("the agent talks in plain words, never a numbered menu", async () => {
   for (const s of [spoken(e.step), help]) assert.doesNotMatch(s, /\b(say|press) \d|; \d, /i);
   // a read-back asks in plain words, and Home sounds like a colleague
   await choose("6-magnets"); await choose("6-magnets-1"); await choose("yes");
+  await choose("tik");
   assert.match(await e.choose("use_as_is", Source.BUTTON), /Content Studio TIK/);
   e.goHome();
-  assert.match(spoken(e.step), /^You have 1 lesson ready to teach\. /);
+  assert.match(spoken(e.step), /^You have 2 lessons ready to teach\. /);
   void Offline;
 });
 
 test("Home offers to carry on a half-planned lesson", async () => {
   await choose("no");
-  await choose("plan"); await choose("c6"); await choose("6-magnets"); await choose(e.step.choices[0].id); await choose("yes");
+  // Nutrition in Plants has no Content Studio TIK, so its TIK is a draft and the lesson is not ready yet
+  await choose("plan"); await choose("c7"); await choose("7-nutrition"); await choose(e.step.choices[0].id); await choose("yes");
   await choose(e.step.choices.find((c) => /English/.test(c.label)).id, true);
-  assert.equal(id(), "plan_tik_source");
+  assert.equal(id(), "plan_review");
+  assert.equal(e.lesson().tikState, "DRAFT");
   await e.goHome();
   assert.equal(id(), "home");
-  assert.deepEqual(e.step.choices.map((c) => c.id), ["resume_plan", "plan", "menu"]);
-  assert.match(e.step.announce, /You were planning Class 6 Science, Exploring Magnets/);
+  assert.deepEqual(e.step.choices.map((c) => c.id), ["resume_plan", "plan", "awaiting", "menu"]);
+  assert.match(e.step.announce, /You were planning Class 7 Science, Nutrition in Plants/);
   assert.deepEqual(match("yes", e.step, null), { type: "choose", choiceId: "resume_plan" }); // a teacher can just agree
   await choose("resume_plan");
-  assert.equal(id(), "plan_tik_source"); // back where they left off
+  assert.equal(id(), "plan_review"); // back to what is left to review
 });
 
 test("Workspace lists Content Studio items and the teacher's own, and opens each", async () => {
@@ -280,10 +284,10 @@ test("Workspace lists Content Studio items and the teacher's own, and opens each
   // a TIK the teacher drafts shows up as theirs, not approved yet
   await choose("home"); await choose("plan"); await choose("c6"); await choose("6-magnets"); await choose("6-magnets-2"); await choose("yes");
   await choose(e.step.choices.find((c) => /English/.test(c.label)).id, true);
-  await choose("use_as_is"); await choose("topic");
+  await choose("topic_tik");
   await e.submitText("12 students", Source.BUTTON);
   await e.goTo(Flow.WORKSPACE, Source.BUTTON);
-  assert.equal(e.step.sections[1].lines[0], "1 TIK, 0 audio, 0 quizzes");
+  assert.equal(e.step.sections[1].lines[0], "1 TIK, 1 audio, 0 quizzes"); // the audio made for this topic too
   await choose("tiks");
   assert.ok(e.step.sections[1].lines.some((x) => /Poles of a magnet: topic TIK · Not approved yet/.test(x)));
 });

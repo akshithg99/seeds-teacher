@@ -405,6 +405,7 @@ export class VoiceOrchestrator {
         reply = e.command(intent.name, Source.VOICE);
       } else if (intent.type === "choose") reply = this.afterAction(await e.choose(intent.choiceId, Source.VOICE));
       else if (intent.type === "goto") reply = await e.goTo(intent.flow, Source.VOICE);
+      else if (intent.type === "open") reply = await e.fillDetails(intent.intent, intent.classNum, intent.day, intent.period, intent.chapter, null, Source.VOICE);
       else if (intent.type === "confirm") reply = this.afterAction(await e.confirmPending(Source.VOICE, text));
       else if (intent.type === "cancel") reply = e.cancelPending() + " " + e.step.question;
       if (reply != null) {

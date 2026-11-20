@@ -81,6 +81,13 @@ export function match(text, step, pending) {
   // "yes" / "okay" to the one thing the agent just offered ("How about chapter 2?")
   if (yes.has(t)) { const p = proposal(step); if (p) return { type: "choose", choiceId: p.id }; }
 
+  // a request with its details ("plan class 7 science for Thursday") fills them all at once (FR-102),
+  // instead of its one keyword ("plan") picking a button and the details being lost
+  if (!pending && !step.freeSpeech) {
+    const o = opening(text);
+    if (o && o.explicit && (o.classNum != null || o.day || o.chapter)) return { type: "open", ...o };
+  }
+
   // short utterance containing a label or word ("yes, approve it")
   if (wc(t) <= 6) {
     const hits = all.filter((c) => [c.label, ...c.words].map(normalize).filter((w) => w.length >= 3).some((w) => new RegExp(`\\b${esc(w)}\\b`).test(t)));
@@ -122,7 +129,9 @@ export function opening(text) {
   else if (t.includes("plan") || t.includes("prepare") || cls != null) intent = "plan";
   if (!intent) return null;
   const ch = Curriculum.findChapter(cls, t);
-  return { intent, classNum: cls, day, period, chapter: ch ? ch.name : null };
+  // explicit: the teacher said what to do, not only a class ("class 7" alone answers a "Which class?")
+  const explicit = intent !== "plan" || /\b(plan|prepare)\b/.test(t);
+  return { intent, classNum: cls, day, period, chapter: ch ? ch.name : null, explicit };
 }
 
 /** Words the recogniser should expect at this step (FR-101). */

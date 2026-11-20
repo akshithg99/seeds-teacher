@@ -438,7 +438,7 @@ export class Engine {
           caught.push(dayNorm);
           const e = this.st.schedule.find((x) => x.day === dayNorm && (d.classNum == null || x.classNum === d.classNum));
           if (e) { d.scheduleId = e.id; d.classNum = e.classNum; d.chapterId = e.chapterId; }
-          else notes.push(`There's nothing on your schedule for ${dayNorm}, so I'll ask for the chapter.`);
+          else notes.push(`${dayNorm} isn't on your schedule yet.`);
         }
         if (chapter) {
           const ch = Curriculum.findChapter(d.classNum, chapter);
@@ -446,6 +446,8 @@ export class Engine {
         }
         const chx = Curriculum.chapter(d.chapterId);
         if (chx && !caught.includes(chx.name)) caught.push(`chapter ${chx.number}, ${chx.name}`);
+        // the class is known but not the chapter: offer where the class is up to (FR-106), as a yes-or-no question
+        if (d.classNum != null && !d.chapterId && !chapter) { const nc = this.nextChapter(d.classNum); if (nc) d.chapterId = nc.id; }
         if (topic) {
           const tp = Curriculum.findTopic(chx, topic);
           if (tp) { d.topicId = tp.id; d.chapterId = Curriculum.chapterOfTopic(tp.id).id; caught.push(tp.name); }
@@ -597,13 +599,46 @@ export class Engine {
     return l;
   }
 
-  /** After the lesson details are confirmed (and the class language is known): open planning. */
-  continuePlan() {
+  /** After the lesson details are confirmed (and the class language is known): prepare the lesson. */
+  async continuePlan() {
     const chx = Curriculum.chapter(this.draft.chapterId), tpx = Curriculum.topic(this.draft.topicId);
     const nl = this.ensureLessonForDraft();
     if (this.previousContext(chx, tpx) && !nl.tik) { this.go("plan_previous"); return ""; }
-    this.go(this.nextPlanningStep(nl));
-    return "";
+    return this.prepareAll();
+  }
+
+  /**
+   * One "yes" prepares the whole lesson: the chapter TIK (Content Studio's as it is, otherwise built from the textbook),
+   * the questions and the audio. Nothing is approved here: the teacher reviews them next, one by one or all in a row.
+   * What was prepared before a failure is kept, and planning carries on from the first missing piece.
+   */
+  async prepareAll() {
+    const id = this.draft.lessonId, l0 = this.lesson();
+    const ch = this.chapterOf(l0), tp = this.topicOf(l0), lang = this.classLang(l0.classNum);
+    const ok = await this.working("Preparing your lesson…", async () => {
+      if (!this.lesson().tik) {
+        const t = ch.syncedTik || await this.gen.chapterTik(ch, lang);
+        if (!t) throw new Error("The TIK could not be prepared.");
+        this.updateLesson(id, (x) => ({ ...x, tik: t, tikState: ch.syncedTik ? "SYNCED_IN_USE" : "DRAFT", tikBefore: null }));
+      }
+      this.updateLesson(id, (x) => ({ ...x, modeChosen: true }));
+      const l = this.lesson();
+      if (!l.questionSets.length && !l.questionsSkipped) {
+        const sets = await this.gen.questionSets(ch, tp, l.tik, lang);
+        if (!sets) throw new Error("The questions could not be prepared.");
+        this.updateLesson(id, (x) => ({ ...x, questionSets: sets }));
+      }
+      if (!l.audio.length && !l.tikOnly) {
+        const clip = await this.makeClip(l, null, "Audio 1", tp.syncedAudio);
+        this.updateLesson(id, (x) => ({ ...x, audio: [...x.audio, clip] }));
+        this.draft.audioClipId = clip.id;
+      }
+      return true;
+    });
+    if (!ok) { this.go(this.nextPlanningStep(this.lesson())); return this.failed("prepare everything"); }
+    this.go("plan_review");
+    const t = this.lesson().tik;
+    return this.langNote(l0.classNum, t && t.lang).trim();
   }
 
   async makeClip(l, variant, name, synced) {
@@ -745,7 +780,7 @@ export class Engine {
           case "setup_week": d.pendingEntries = []; this.go("sched_class"); return "Your schedule tells the app which class, chapter and topic comes next, so you don't have to say them each time.";
           case "schedule": this.go(this.st.schedule.length ? "sched_view" : "sched_class"); break;
           case "plan": d.clearPlanning(); this.go("plan_class"); break;
-          case "resume_plan": { const l = this.unfinishedLesson(); if (l) { d.clearPlanning(); d.lessonId = l.id; this.go(this.nextPlanningStep(l)); } break; }
+          case "resume_plan": { const l = this.unfinishedLesson(); if (l) { d.clearPlanning(); d.lessonId = l.id; this.go(l.tik ? "plan_review" : this.nextPlanningStep(l)); } break; }
           case "next_topic": this.go("next_class"); break;
           case "teach_pick": this.go("teach_pick"); break;
           case "awaiting": this.go("awaiting"); break;
@@ -800,7 +835,7 @@ export class Engine {
         this.setClassLang(c2, c);
         const next = d.langNext; d.langFor = null; d.langNext = null;
         const said = `Class ${c2} is taught in ${c}.` + (c !== "English" && !this.gen.online ? " There is only English support." : "");
-        if (next === "__plan") { this.continuePlan(); return said; }
+        if (next === "__plan") return [said, await this.continuePlan()].filter(Boolean).join(" ");
         this.go(next || "home");
         return said;
       }
@@ -882,15 +917,23 @@ export class Engine {
           const chx = Curriculum.chapter(d.chapterId);
           const pre = chx.topics.length ? "" : "No Course from Content Studio for this chapter. ";
           if (!this.classLang(chx.classNum)) { d.langFor = chx.classNum; d.langNext = "__plan"; this.go("class_lang"); return pre; }
-          this.continuePlan();
-          return pre;
+          return pre + await this.continuePlan();
         }
-        if (c === "change") { d.chapterId = null; d.topicId = null; this.go("plan_class"); }
+        // "no" keeps the class and asks for the chapter
+        if (c === "change") { d.chapterId = null; d.topicId = null; this.go(d.classNum != null ? "plan_chapter" : "plan_class"); }
         break;
-      case "plan_previous":
+      case "plan_previous": {
         this.updateLesson(l.id, (x) => ({ ...x, usePreviousContext: c === "use" }));
-        this.go(this.nextPlanningStep(this.lesson()));
-        return c === "use" ? "I'll use what happened last time." : "Starting fresh.";
+        const said = c === "use" ? "I'll use what happened last time." : "Starting fresh.";
+        return [said, await this.prepareAll()].filter(Boolean).join(" ");
+      }
+      case "plan_review":
+        if (c === "review") this.go(this.nextPlanningStep(l));
+        if (c === "tik") this.go(l.tikState === "SYNCED_IN_USE" ? "tik_view" : "tik_review");
+        if (c === "questions") this.go("qs_review");
+        if (c === "audio") { d.audioClipId = l.audio.length ? l.audio[0].id : null; this.go("audio_review"); }
+        if (c === "topic_tik") this.go("plan_need");
+        break;
       case "plan_tik_source": case "tik_view":
         if (c === "use_as_is") {
           this.updateLesson(l.id, (x) => ({ ...x, tik: ch.syncedTik, tikState: "SYNCED_IN_USE", tikBefore: null }));
