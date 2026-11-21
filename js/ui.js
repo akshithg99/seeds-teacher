@@ -25,7 +25,7 @@ const ICON = {
   mic: '<rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/>',
   home: '<path d="M4 11l8-6.5 8 6.5V20h-5.5v-5.5h-5V20H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
-  week: '<rect x="4" y="5.5" width="16" height="14.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  plan: '<path d="M12 6.5C10 5 7 4.5 4 5v13.5c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   records: '<path d="M15.5 4.5l4 4L9 19H5v-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   workspace: '<path d="M4 7.5L12 4l8 3.5-8 3.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12l8 3.5 8-3.5M4 16.5L12 20l8-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   speaker: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
@@ -118,7 +118,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
       lines.length ? h("div", { class: "vtext" }, lines) : null,
       signedIn ? [
         tab("Today", ICON.home, () => goFlow(Flow.HOME), flow === Flow.HOME),
-        tab("Week", ICON.week, () => goFlow(Flow.SCHEDULE), flow === Flow.SCHEDULE),
+        tab("Plan", ICON.plan, () => goFlow(Flow.PLAN), flow === Flow.PLAN),
         tab("Records", ICON.records, () => goFlow(Flow.FOLLOWUP), flow === Flow.FOLLOWUP),
         tab("Workspace", ICON.workspace, () => goFlow(Flow.WORKSPACE), flow === Flow.WORKSPACE),
       ] : null));
@@ -138,7 +138,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     ));
     if (!ui.navOpen) { navEl.replaceChildren(); return; }
     // FR-108 / §12: flat list in the order of the teaching day, the same at every screen size
-    const items = [Flow.HOME, Flow.SCHEDULE, Flow.PLAN, Flow.TEACH, Flow.QUIZ, Flow.FOLLOWUP, Flow.WORKSPACE];
+    const items = [Flow.HOME, Flow.PLAN, Flow.TEACH, Flow.QUIZ, Flow.FOLLOWUP, Flow.WORKSPACE];
     navEl.replaceChildren(h("div", { class: "shell" }, h("ul", { class: "navlist" },
       items.map((f) => h("li", {}, h("button", { type: "button", "aria-current": s.flow === f ? "page" : null, onclick: () => goFlow(f) }, f.label))),
       h("li", {}, h("button", { type: "button", onclick: onHelp }, "Help")),
@@ -283,7 +283,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     const voices = LANGS.map((g) => `${g}: ${hasVoice(g) ? "voice available" : "no voice on this device"}`);
     const delRow = h("div", { class: "keyrow" });
     const showDel = () => delRow.replaceChildren(h("button", { class: "btn", type: "button", onclick: () => delRow.replaceChildren(
-      h("span", {}, "Delete your schedule, lessons, records and settings from this browser? This cannot be undone. "),
+      h("span", {}, "Delete your lessons, records and settings from this browser? This cannot be undone. "),
       h("button", { class: "btn yes", type: "button", onclick: clearData }, "Yes, delete"), h("button", { class: "btn", type: "button", onclick: showDel }, "Cancel")) }, "Delete my data on this device"));
     showDel();
     const check = (idv, label, checked, onchange) => h("label", { class: "check" }, h("input", { type: "checkbox", id: idv, checked, onchange }), label);
@@ -319,7 +319,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
         } }, "Save and test key")),
         keyMsg, removeRow,
         h("h3", {}, "Your data"),
-        h("p", { class: "small" }, "This prototype keeps your schedule, lessons and records only in this browser. Nothing is sent anywhere, except requests to Claude when you add a key. The classroom is never recorded."),
+        h("p", { class: "small" }, "This prototype keeps your lessons and records only in this browser. Nothing is sent anywhere, except requests to Claude when you add a key. The classroom is never recorded."),
         delRow,
       ));
     if (!dlg.open) dlg.showModal();

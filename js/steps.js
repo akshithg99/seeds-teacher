@@ -1,14 +1,12 @@
 import { Curriculum, LANGS } from "./data.js";
 import { Tier, Flow, makeStep, choice, section, inLang } from "./step.js";
-import { DAYS } from "./matcher.js";
 import * as Offline from "./offline.js";
 
 export const PLANNED_MINUTES = 40;
-const NOT_APPROVED = "Created by SEEDS 2.0 — not yet approved";
+const NOT_APPROVED = "Created by SEEDS PROJECT-B — not yet approved";
 const PLAN_STAGES = ["Lesson", "TIK", "Questions", "Audio", "Ready"];
 const planProgress = (stage) => ({ labels: PLAN_STAGES, current: stage });
 const numberWord = (n) => ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] || String(n);
-const ordinal = (n) => ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"][n] || `${n}th`;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const orList = (xs) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " or " + xs[xs.length - 1]);
@@ -57,7 +55,6 @@ export function buildStep(e) {
 
     case "menu":
       return makeStep("menu", Flow.HOME, "All features", "Which would you like?", paged([
-        choice("schedule", "My schedule", { words: ["schedule", "calendar", "week"] }),
         choice("plan", "Plan a lesson", { words: ["plan"] }),
         choice("teach_pick", "Teach a lesson", { words: ["teach"] }),
         choice("quiz", "Assessment or quiz", { words: ["quiz", "assessment"] }),
@@ -151,88 +148,10 @@ export function buildStep(e) {
         { announce: "I ask this once for each class.", help: "This sets the language of what I prepare for this class. You can change it later in Settings." });
     }
 
-    // ======================================================== F14 Calendar Scheduling
-    case "sched_class":
-      return makeStep("sched_class", Flow.SCHEDULE, "Set up your week", d.pendingEntries.length ? "Which class?" : "Which class do you teach first?", classChoices(), {
-        announce: !st.schedule.length && !d.pendingEntries.length ? "Your schedule tells the app which class, chapter and topic comes next." : null,
-        sections: d.pendingEntries.length ? [section("This week so far", d.pendingEntries.map((x) => e.entryText(x)))] : [],
-        help: "With the voice guide you can say several things at once, for example: class 6 science, Monday second period, Exploring Magnets.",
-        secondary: [homeBtn()] });
-
-    case "sched_day":
-      return makeStep("sched_day", Flow.SCHEDULE, "Day", "Which day?", paged(DAYS.map((x) => choice(x, x, { words: [x.toLowerCase(), x.slice(0, 3).toLowerCase()] })), r.page),
-        { known: [...(d.classNum != null ? [["Class", `${d.classNum}`]] : []), ["Subject", "Science"]] });
-
-    case "sched_period":
-      return makeStep("sched_period", Flow.SCHEDULE, "Period", "Which period?",
-        paged([1, 2, 3, 4, 5, 6, 7, 8].map((p) => choice(`p${p}`, `Period ${p}`, { words: [`period ${p}`, `${p}`, numberWord(p), ordinal(p), `${ordinal(p)} period`] })), r.page),
-        { known: [...(d.classNum != null ? [["Class", `${d.classNum}`]] : []), ...(d.day ? [["Day", d.day]] : [])] });
-
-    case "sched_chapter": {
-      const c = d.classNum != null ? d.classNum : 6;
-      const next = e.nextChapterForSchedule();
-      const chapters = Curriculum.forClass(c).map((x) => choice(x.id, `Chapter ${x.number}: ${x.name}`, { words: [x.name.toLowerCase(), `chapter ${x.number}`] }));
-      const choices = [...(next ? [choice("next", `The next chapter: ${next.name}`, { words: ["next chapter", "the next chapter", "next"], suggested: true })] : []), ...chapters.filter((x) => !next || x.id !== next.id)];
-      return makeStep("sched_chapter", Flow.SCHEDULE, "Chapter", "Which chapter? You can say 'the next chapter'.", paged(choices, r.page),
-        { suggestion: next ? { choiceId: "next", reason: "because it follows on in the textbook" } : null, known: [["Class", `${c}`], ...(d.day ? [["Day", d.day]] : []), ...(d.period != null ? [["Period", `${d.period}`]] : [])] });
-    }
-
-    case "sched_more": {
-      const hasLastWeek = st.schedule.length && d.pendingEntries.length <= 1;
-      return makeStep("sched_more", Flow.SCHEDULE, "Your week", "Add another class to your week?", [
-        choice("add", "Add another class", { words: ["add", "another", "yes"] }),
-        choice("done", "That's all, read it back", { words: ["done", "that's all", "no", "read it back"] }),
-        ...(hasLastWeek ? [choice("same", "Same as last week", { words: ["same as last week", "same"] })] : []),
-      ], { sections: [section("This week so far", d.pendingEntries.map((x) => e.entryText(x)))] });
-    }
-
-    case "sched_review": {
-      const n = d.pendingEntries.length;
-      const list = d.pendingEntries.map((x) => e.entryText(x));
-      return makeStep("sched_review", Flow.SCHEDULE, "Check your week", "Shall I save this schedule?", [
-        choice("save", "Save schedule", { tier: Tier.CHANGE, words: ["save", "yes"], readBack: `I'll save ${plural(n, "class", "classes")}: ${list.join("; ")}.` }),
-        choice("change", "Remove an entry", { words: ["change", "remove"] }),
-        choice("restart", "Start over", { tier: Tier.CHANGE, words: ["start over", "restart"], readBack: `I'll clear the ${plural(n, "class", "classes")} you've added here. Your saved schedule does not change.` }),
-      ], { announce: `Here is your week. ${list.join(". ")}.`, sections: [section("Your week", list)] });
-    }
-
-    case "sched_pick_pending":
-      return makeStep("sched_pick_pending", Flow.SCHEDULE, "Remove an entry", "Which entry should I remove?",
-        paged(d.pendingEntries.map((x) => choice(x.id, e.entryText(x), { tier: Tier.CHANGE, readBack: `I'll remove ${e.entryText(x)} from this week. Nothing else changes.` })), r.page),
-        { secondary: [choice("__back_review", "Keep all entries", { words: ["keep", "keep all", "none"] })] });
-
-    case "sched_view": {
-      const sorted = e.sortedSchedule();
-      return makeStep("sched_view", Flow.SCHEDULE, "My schedule", "Add a class, or change an entry?",
-        [choice("add", "Add a class", { words: ["add"] }), choice("change", "Change an entry", { words: ["change", "move"] }), homeBtn()],
-        { announce: `You have ${plural(sorted.length, "class", "classes")} this week.`,
-          sections: [section("This week", sorted.map((x) => { const lx = e.lessonForEntry(x); return `${e.entryText(x)} — ${lx && e.ready(lx) ? "ready to teach" : lx ? "being prepared" : "not prepared"}`; }))] });
-    }
-
-    case "sched_pick":
-      return makeStep("sched_pick", Flow.SCHEDULE, "Change an entry", "Which entry?", paged(e.sortedSchedule().map((x) => choice(x.id, e.entryText(x))), r.page), { secondary: [homeBtn()] });
-
-    case "sched_change_field": {
-      const x = st.schedule.find((y) => y.id === d.editEntryId);
-      return makeStep("sched_change_field", Flow.SCHEDULE, "Change an entry", "What changes: the day, the period or the chapter? Or remove it?", [
-        choice("day", "Day"), choice("period", "Period"), choice("chapter", "Chapter"),
-        choice("remove", "Remove it", { tier: Tier.CHANGE, words: ["remove", "delete"], readBack: `I'll remove ${x ? e.entryText(x) : "this entry"} from your week. Nothing else moves.` }),
-      ], { known: x ? [["Entry", e.entryText(x)]] : [] });
-    }
-
-    case "sched_change_confirm": {
-      const old = st.schedule.find((y) => y.id === d.editEntryId), p = d.proposed;
-      const from = old ? e.entryText(old) : "", to = p ? e.entryText(p) : "";
-      return makeStep("sched_change_confirm", Flow.SCHEDULE, "Confirm the change", "Apply this change?", [
-        choice("apply", "Apply change", { tier: Tier.CHANGE, words: ["apply", "yes"], readBack: `I'll change ${from} to ${to}. Nothing else moves.` }),
-        choice("cancel", "Cancel", { words: ["cancel", "no"] }),
-      ], { sections: [section("Change", [`From: ${from}`, `To: ${to}`])] });
-    }
-
     // ======================================================== F3 Plan the lesson
     case "plan_class":
       return makeStep("plan_class", Flow.PLAN, "Plan a lesson", "Which class?", classChoices(), {
-        help: "With the voice guide you can also say the whole lesson at once, for example: plan class 7 science for Thursday.",
+        help: "With the voice guide you can also say the whole lesson at once, for example: plan the next class 7 science lesson.",
         sections: [section("Covered", ["SEEDS covers science for classes 6, 7 and 9."])], secondary: [homeBtn()], progress: planProgress(0) });
 
     case "plan_chapter": {
@@ -255,12 +174,12 @@ export function buildStep(e) {
 
     case "plan_confirm": {
       const chx = Curriculum.chapter(d.chapterId), tpx = Curriculum.topic(d.topicId);
-      const sched = st.schedule.find((x) => x.id === d.scheduleId);
-      return makeStep("plan_confirm", Flow.PLAN, "Your lesson",
-        `Start with chapter ${chx && chx.number}, ${chx && chx.name}, topic ${tpx && tpx.name}?`,
+      const where = `chapter ${chx && chx.number}, ${chx && chx.name}, topic ${tpx && tpx.name}`;
+      const taught = !!chx && st.sessions.some((x) => x.endedAt != null && (e.lesson(x.lessonId) || {}).classNum === chx.classNum);
+      return makeStep("plan_confirm", Flow.PLAN, "Your lesson", taught ? `Next is ${where}. Continue from here?` : `Start with ${where}?`,
         [choice("yes", "Yes, continue", { words: ["yes", "right", "correct", "continue"] }), choice("change", "Change something", { words: ["no", "change"] })],
         { known: [["Class", `${chx && chx.classNum}`], ["Subject", "Science"], ["Chapter", `${chx && chx.number}. ${chx && chx.name}`], ["Topic", `${tpx && tpx.name}`],
-          ...(sched ? [["From your schedule", `${sched.day}, period ${sched.period}`]] : []), ...(chx && e.classLang(chx.classNum) ? [["Language", e.classLang(chx.classNum)]] : [])],
+          ...(chx && e.classLang(chx.classNum) ? [["Language", e.classLang(chx.classNum)]] : [])],
           progress: planProgress(0) });
     }
 
@@ -279,7 +198,7 @@ export function buildStep(e) {
         sections: [
           section("TIK", [l && l.tik ? `${l.tik.scope === "topic" ? "Topic" : "Chapter"} TIK · ${tikStatus}` : tikStatus]),
           section("Questions", [sets.length ? `${plural(sets.length, "set", "sets")}, for the overview and ${tp && tp.name} · ${sets.every((s) => s.approved) ? "Approved" : "Not approved yet"}` : l && l.questionsSkipped ? "Skipped" : "Not prepared"]),
-          section("Audio", clips.length ? clips.map((a) => `${a.name} · ${a.provenance.startsWith("Synced") ? "from Content Studio" : "made for this lesson"} · ${a.approved ? "Approved" : "Not approved yet"}`) : [l && l.tikOnly ? "TIK only, no audio" : "Not prepared"]),
+          section("Audio", clips.length ? clips.map((a) => `${a.name} · ${a.approved ? "In use" : "Not used yet"}`) : [l && l.tikOnly ? "Taught from the TIK, no audio" : "Not prepared"]),
         ] });
     }
 
@@ -354,10 +273,6 @@ export function buildStep(e) {
     }
 
     case "checkpoint":
-      if (d.checkpointFor === "audio") return makeStep("checkpoint", Flow.PLAN, "Checkpoint", `You've tried ${d.tries} times. Keep going, or use the Content Studio version?`, [
-        choice("keep", "Keep trying", { words: ["keep", "keep trying"] }),
-        l && l.audio.some((a) => a.provenance.startsWith("Synced")) ? choice("use_cs", "Use Content Studio version", { words: ["content studio", "use"] }) : choice("stop", "Stop and review", { words: ["stop", "review"] }),
-      ], { progress: planProgress(3) });
       if (d.checkpointFor === "tik_regen") return makeStep("checkpoint", Flow.PLAN, "Checkpoint", `You've tried ${d.tries} times. Keep going, or stop and review what you have?`,
         [choice("stop", "Stop and review", { words: ["stop", "review"] }), choice("keep", "Keep trying", { words: ["keep"] })], { progress: planProgress(1) });
       return makeStep("checkpoint", Flow.PLAN, "Checkpoint", `You've asked for ${d.changeCount} changes. Keep refining, or stop and review what you have?`,
@@ -388,49 +303,35 @@ export function buildStep(e) {
 
     // ======================================================== F5 Prepare audio
     case "audio_offer":
-      return makeStep("audio_offer", Flow.PLAN, "Audio", "Prepare audio for this lesson?",
-        [choice("prepare", "Prepare audio", { words: ["prepare", "yes", "audio"] }), choice("tik_only", "Continue with TIK only", { words: ["tik only", "continue", "no"] })],
-        { known: lessonKnown, progress: planProgress(3), announce: [tp && tp.syncedAudio ? "Content Studio has audio for this topic." : null, tp && !tp.syncedAudio ? e.prepLine(l.classNum) : null].filter(Boolean).join(" ") || null });
+      if (!(tp && tp.syncedAudio)) return makeStep("audio_offer", Flow.PLAN, "Audio", "Content Studio has no audio for this topic, so you'll teach from the TIK. Continue?",
+        [choice("tik_only", "Continue with the TIK", { words: ["continue", "yes", "okay", "tik only"] })], { known: lessonKnown, progress: planProgress(3) });
+      return makeStep("audio_offer", Flow.PLAN, "Audio", "Audio from Content Studio is ready. Use it?",
+        [choice("use", "Use it", { words: ["use", "use it", "yes"] }), choice("tik_only", "Teach without it", { words: ["without", "teach without it", "no", "tik only"] })],
+        { known: lessonKnown, progress: planProgress(3) });
 
     case "audio_review": {
       const clip = l ? e.focusClip(l) : null;
       const clips = (l && l.audio) || [];
-      const hasSynced = clips.some((a) => a.provenance.startsWith("Synced"));
-      const isExtra = !!clip && clips.indexOf(clip) > 0 && !(clip.provenance.startsWith("Generated") && hasSynced && clips.length === 2 && !clips.some((a) => a.approved && a.id !== clip.id));
       const choices = clip && !clip.approved ? [
         choice("play", "Play preview", { tier: Tier.READ, words: ["play", "preview", "listen"] }),
-        choice("approve", "Approve", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve ${clip.name} for ${tp && tp.name} so you can play it in class.` }),
-        isExtra ? choice("discard", "Discard this extra", { tier: Tier.CHANGE, words: ["discard"], readBack: `I'll delete ${clip.name}. The other audio stays.` })
-          : clip.provenance.startsWith("Synced") ? choice("different", "Try a different version", { words: ["different", "different version"] })
-            : choice("again", "Try again", { words: ["try again", "again"] }),
-        ...(!clip.provenance.startsWith("Synced") && hasSynced && !isExtra ? [choice("keep_synced", "Keep synced instead", { words: ["keep synced", "synced"] })] : []),
-      ] : [
-        choice("play", "Play preview", { tier: Tier.READ, words: ["play"] }),
-        ...(clips.length < 3 ? [choice("add", "+ Add another audio", { words: ["add", "another"] })] : []),
-        choice("done", "Done", { words: ["done"] }),
-      ];
-      return makeStep("audio_review", Flow.PLAN, "Review the audio",
-        clip && !clip.approved ? "Audio is ready. Play it, approve it, or try a different version?" : "Audio approved. Add another, or done?", choices, {
-          announce: clip ? `${clip.name}. ${clip.provenance}` + (clip.approved ? ", approved." : ", not yet reviewed.") : null,
+        choice("use", "Use it", { words: ["use", "use it", "yes"] }),
+        choice("without", "Teach without it", { words: ["without", "teach without it", "no"] }),
+      ] : [choice("play", "Play preview", { tier: Tier.READ, words: ["play"] }), choice("done", "Done", { words: ["done", "yes"] })];
+      return makeStep("audio_review", Flow.PLAN, "Lesson audio",
+        clip && !clip.approved ? "Audio from Content Studio is ready. Play it, use it, or teach without it?" : "This audio is in use. Done?", choices, {
+          announce: clip ? `${clip.name}. ${clip.provenance}` + (clip.approved ? ", in use." : ", not used yet.") : null,
           known: lessonKnown, progress: planProgress(3), contentLang: clip && clip.lang,
           secondary: e.audio.isPlaying() ? [choice("stop_preview", "Stop preview", { words: ["stop preview", "pause"] })] : [],
-          sections: clips.map((a) => section(`${a.name} · ${a.provenance}` + (a.approved ? " · approved" : " · not yet reviewed") + (a.lang && a.lang !== "English" ? ` · ${a.lang}` : ""),
+          sections: clips.map((a) => section(`${a.name} · ${a.provenance}` + (a.approved ? " · in use" : " · not used yet") + (a.lang && a.lang !== "English" ? ` · ${a.lang}` : ""),
             [`About ${a.durationSec} seconds. Loudness: played by this device's voice, so it cannot be measured here. Set the speaker volume high.`, `Script: ${a.script}`], { lang: a.lang })) });
     }
-
-    case "audio_add":
-      return makeStep("audio_add", Flow.PLAN, "Another audio", "What should this extra audio do differently?", [
-        choice("slower", "Slower pace", { words: ["slower", "slow"] }), choice("shorter", "Shorter summary", { words: ["shorter", "short"] }),
-        choice("reexplain", "Re-explain one step", { words: ["re-explain", "reexplain", "explain again"] }), choice("back", "Back", { words: ["back"] }),
-      ], { known: lessonKnown, progress: planProgress(3), freeSpeech: { prompt: "Or say what should be different", longWindow: true } });
 
     case "lesson_saved": {
       const n = e.approvedAudio(l).length;
       return makeStep("lesson_saved", Flow.PLAN, "Saved", "Where would you like to go?", [
         choice("home", "Back to Home", { words: ["home"] }),
         choice("open", "Open lesson", { words: ["open", "open lesson", "teach"] }),
-        ...(n >= 1 && n <= 2 ? [choice("add", "+ Add another audio", { words: ["add", "another audio"] })] : []),
-      ], { announce: `Saved to ${e.lessonName(l)}. Ready to teach.` + (n > 1 ? ` Audio · ${n} versions.` : n === 0 ? " TIK only, no audio." : ""), known: lessonKnown, progress: planProgress(4) });
+      ], { announce: "Lesson saved and ready to teach." + (n === 0 ? " Taught from the TIK, no audio." : ""), known: lessonKnown, progress: planProgress(4) });
     }
 
     // ======================================================== F6 / F7 Teaching
@@ -451,10 +352,14 @@ export function buildStep(e) {
       const i = Math.min(Math.max(0, (s && s.stepIndex) || 0), Math.max(0, steps.length - 1));
       const hasAudio = e.approvedAudio(l).length > 0;
       const tl = l && l.tik && l.tik.lang;
+      // questions are offered only if they were prepared before class (8.4)
+      const hasQs = !!l && l.questionSets.some((q) => q.approved && q.check.length);
+      const what = ["play audio", ...(hasQs ? ["learning check"] : [])].join(", ");
       return makeStep("teach_step", Flow.TEACH, `Step ${i + 1} of ${steps.length}`,
-        i < steps.length - 1 ? "Next step, play audio, or end class?" : "This is the last step. Play audio, or end class?", [
+        i < steps.length - 1 ? `Next step, ${what}, or end class?` : `This is the last step. ${cap(what)}, or end class?`, [
           ...(i < steps.length - 1 ? [choice("next", "Next step", { words: ["next", "next step"] })] : []),
-          choice("audio", "Play audio", { words: ["play audio", "audio", "play"], enabled: hasAudio, whyDisabled: "No approved audio for this lesson. Teacher-led works as usual." }),
+          choice("audio", "Play audio", { words: ["play audio", "audio", "play"], enabled: hasAudio, whyDisabled: "No audio for this lesson. Teacher-led works as usual." }),
+          ...(hasQs ? [choice("lc", "Learning check", { words: ["learning check", "questions", "the questions"] })] : []),
           choice("end", "End class", { tier: Tier.COMMIT, words: ["end class", "end"], commitWord: "end class", readBack: "I'll end the class and ask what was covered." }),
         ], { announce: inLang(tl, steps[i] || ""), inClass: true, contentLang: tl,
           known: [["Lesson", e.lessonName(l)], ["Method", "Your choice: activity, teacher-led, audio, discussion or tactile materials"]],
@@ -526,14 +431,25 @@ export function buildStep(e) {
       return makeStep("extension", Flow.TEACH, "Extension activity", "Say done when the activity is over.", [choice("done", "Done", { words: ["done", "finished"] })],
         { inClass: true, announce: inLang(l && l.tik && l.tik.lang, (l && l.tik && l.tik.extension) || ""), sections: [section("Extension activity", [(l && l.tik && l.tik.extension) || ""], { lang: l && l.tik && l.tik.lang })] });
 
+    case "lc_read": {
+      const sets = l ? l.questionSets.filter((q) => q.approved && q.check.length) : [];
+      return makeStep("lc_read", Flow.TEACH, "Learning check", "Shall I read the questions to the class?", [
+        choice("read", "Read them aloud", { tier: Tier.READ, words: ["read", "yes", "read them", "read the questions"] }),
+        choice("back", "Back to lesson", { words: ["back", "back to lesson"] }),
+        choice("end", "End class", { tier: Tier.COMMIT, words: ["end class", "end"], commitWord: "end class", readBack: "I'll end the class and ask what was covered." }),
+      ], { inClass: true, announce: "Ask the class these questions, or I can read them aloud. Students answer aloud.", contentLang: sets[0] && sets[0].lang,
+        sections: sets.map((q) => section(q.title, q.check, { lang: q.lang })),
+        help: "This is ungraded and for the whole class. Nothing about individual students is stored." });
+    }
+
     case "lc_ask": {
       const key = d.lcQueue[d.lcIndex];
       const set = l && l.questionSets.find((q) => q.key === key);
-      return makeStep("lc_ask", Flow.FOLLOWUP, `Learning check: ${set && set.title}`, "How did the class do: most, some, few or none?", [
-        choice("most", "Most", { words: ["most"] }), choice("some", "Some", { words: ["some"] }),
-        choice("few", "Few", { words: ["few"] }), choice("none", "None", { words: ["none", "nobody"] }),
-      ], { announce: "Ask the class: " + inLang(set && set.lang, ((set && set.check) || []).join(" ")), contentLang: set && set.lang,
-        sections: [section("Ask the class aloud", (set && set.check) || [], { lang: set && set.lang })],
+      return makeStep("lc_ask", Flow.FOLLOWUP, `Learning check: ${set && set.title}`, "How many could answer: few, some, many or none?", [
+        choice("few", "Few", { words: ["few"] }), choice("some", "Some", { words: ["some"] }),
+        choice("many", "Many", { words: ["many", "most"] }), choice("none", "None", { words: ["none", "nobody"] }),
+      ], { contentLang: set && set.lang,
+        sections: [section("The questions", (set && set.check) || [], { lang: set && set.lang })],
         secondary: [choice("skip", "Skip", { words: ["skip"] })], help: "This is ungraded and for the whole class. Nothing about individual students is stored." });
     }
 
@@ -615,12 +531,13 @@ export function buildStep(e) {
 
     case "quiz_results": {
       const q = st.quizzes.find((x) => x.id === d.quizId);
+      const topic = (e.topicOf(e.lesson(q && q.lessonId)) || {}).name;
       const open = st.patterns.filter((p) => p.state === "Proposed").length;
       return makeStep("quiz_results", Flow.QUIZ, "Quiz results", "Where would you like to go?",
         [...(open ? [choice("followups", "See follow-up suggestion", { words: ["follow up"] })] : []), homeBtn()], {
-          announce: `${q && q.responses} responses. ${q && q.belowThreshold} students scored below 35 percent.`,
-          sections: [section("Class level", ((q && q.perQuestionCorrect) || []).map((n, i) => `Question ${i + 1}: ${n} of ${q.responses} correct.`)),
-            section("Below the threshold", [`${q && q.belowThreshold} students scored below 35 percent. Their names are shown only to you (not shown in this prototype).`])] });
+          announce: `${q && q.responses} students answered. ${q && q.wrongPct}% of the answers were wrong.`,
+          sections: [section("The class as a whole", ((q && q.perQuestionCorrect) || []).map((n, i) => `Question ${i + 1}: ${n} of ${q.responses} correct.`)),
+            section("Needs reinforcement", [q && q.wrongPct >= 20 ? `${topic}: ${q.wrongPct}% of the answers were wrong.` : "No concept stands out."])] });
     }
 
     // ======================================================== F10 Remediation
@@ -636,21 +553,26 @@ export function buildStep(e) {
     case "followup_pattern": {
       const p = st.patterns.find((x) => x.id === d.patternId);
       const text = `${p && p.concept}: ${p ? p.signals.join("; ") : ""}.`;
-      if (p && p.state === "Proposed") return makeStep("followup_pattern", Flow.FOLLOWUP, "Follow-up suggestion", "This topic needs follow-up. Confirm or dismiss?", [
-        choice("confirm", "Confirm", { tier: Tier.CHANGE, words: ["confirm", "yes"], readBack: `I'll mark ${p.concept} as needing follow-up for a group of about ${p.groupSize} students.` }),
+      if (p && p.state === "Proposed") return makeStep("followup_pattern", Flow.FOLLOWUP, "Follow-up suggestion", `${p.concept} needs follow-up. Confirm, change or dismiss?`, [
+        choice("confirm", "Confirm", { tier: Tier.CHANGE, words: ["confirm", "yes"], readBack: `I'll mark ${p.concept} as needing follow-up with the class.` }),
+        choice("change", "Change it", { words: ["change", "change it"] }),
         choice("dismiss", "Dismiss", { tier: Tier.CHANGE, words: ["dismiss", "no"], readBack: "I'll dismiss this suggestion. Nothing else changes." }),
-      ], { announce: text, banner: NOT_APPROVED, sections: [section("Signals behind it", p.signals), section("Group", [`About ${p.groupSize} of ${p.classSize} students. Names are shown only to you.`])] });
+      ], { announce: text, banner: NOT_APPROVED, sections: [section("Results behind it", p.signals)] });
       if (p && p.followUp) return makeStep("followup_pattern", Flow.FOLLOWUP, "Re-check", "After teaching the follow-up: resolved, or still needs work?", [
         choice("resolved", "Resolved", { tier: Tier.CHANGE, words: ["resolved"], readBack: `I'll mark ${p.concept} as resolved.` }), choice("still", "Still needs work", { words: ["still", "needs work"] }),
       ], { announce: `${text} Follow-up prepared: ${p.followUp}.` });
       return makeStep("followup_pattern", Flow.FOLLOWUP, "Follow-up", "Prepare a follow-up now?", [choice("type", "Prepare follow-up", { words: ["prepare", "yes"] }), homeBtn()], { announce: text });
     }
 
+    case "followup_change":
+      return makeStep("followup_change", Flow.FOLLOWUP, "Change the follow-up", "Which concept needs follow-up?", [choice("back", "Back", { words: ["back"] })],
+        { freeSpeech: { prompt: "For example: the north and south poles", longWindow: true } });
+
     case "followup_type": {
       const p = st.patterns.find((x) => x.id === d.patternId);
       const base = p && e.lesson(p.lessonId);
-      return makeStep("followup_type", Flow.FOLLOWUP, "Follow-up content", "A simpler TIK, audio or a quiz?",
-        [choice("tik", "A simpler TIK", { words: ["tik", "simpler"] }), choice("audio", "Audio", { words: ["audio"] }), choice("quiz", "A quiz", { words: ["quiz"] })],
+      return makeStep("followup_type", Flow.FOLLOWUP, "Follow-up content", "A simpler activity in a TIK, or a new quiz?",
+        [choice("tik", "A simpler TIK", { words: ["tik", "simpler", "activity"] }), choice("quiz", "A new quiz", { words: ["quiz", "new quiz"] })],
         { announce: base ? e.prepLine(base.classNum) : null, sections: [section("What happens", ["It goes through the normal approval step before it is used."])] });
     }
 
@@ -666,17 +588,7 @@ function homeStep(e) {
     sections.push(section("Class in progress", [e.lessonName(e.lesson(active.lessonId))], { emphasis: true }));
     choices.push(choice("continue", "Continue teaching", { words: ["continue", "continue teaching"] }));
   }
-  const next = e.nextScheduled();
-  if (next) {
-    const [en, lx] = next;
-    const ch = Curriculum.chapter(en.chapterId);
-    const tp = lx ? e.topicOf(lx) : ch ? e.nextTopic(ch) : null;
-    const status = lx && e.ready(lx) && !e.approvedAudio(lx).length && !lx.tikOnly ? "ready to teach, no audio yet" : lx && e.ready(lx) ? "ready to teach" : "not ready, no TIK yet";
-    const ready = st.schedule.filter((x) => { const y = e.lessonForEntry(x); return y && e.ready(y); }).length;
-    sections.push(section("Next lesson", [`${en.day} period ${en.period}: Class ${en.classNum} ${en.subject}, ${ch && ch.name}, ${tp && tp.name}. ${cap(status)}.`,
-      `This week: ${ready} of ${plural(st.schedule.length, "scheduled lesson", "scheduled lessons")} ready.`], { emphasis: !active }));
-    if (!active) choices.push(lx && e.ready(lx) ? choice("start_next", "Start class", { words: ["start class", "start"] }) : choice("prepare_next", "Prepare it", { words: ["prepare it", "prepare"] }));
-  } else {
+  {
     const ready = st.lessons.filter((x) => e.ready(x) && !e.taught(x));
     if (ready.length) {
       sections.push(section("Ready to teach", ready.map((x) => e.lessonName(x)), { emphasis: !active }));
@@ -687,10 +599,9 @@ function homeStep(e) {
       sections.push(section("Being planned", [e.lessonName(todo)], { emphasis: !active && !ready.length }));
       choices.push(choice("resume_plan", "Carry on planning", { words: ["carry on", "carry on planning", "continue planning", "finish planning", "finish it"] }));
     }
-    if (!st.lessons.length && !st.sessions.length) sections.push(section("No lessons yet", ["Set up your week, or plan a lesson."]));
+    if (!st.lessons.length && !st.sessions.length) sections.push(section("No lessons yet", ["Ask what to teach next, or plan a lesson."]));
     // Home always offers a way forward, whatever state the lessons are in
     if (!todo && !ready.length) choices.push(choice("next_topic", "What should I teach next?", { words: ["what should i teach", "teach next", "lesson plan", "what is my lesson plan"] }));
-    if (!todo && !ready.length) choices.push(choice("setup_week", "Set up my week", { words: ["set up", "schedule", "my week"] }));
     choices.push(choice("plan", "Plan a lesson", { words: ["plan"] }));
   }
   const waiting = [];
@@ -701,26 +612,21 @@ function homeStep(e) {
   const n5 = st.patterns.filter((p) => p.state === "Proposed").length; if (n5) waiting.push(`${n5} follow-up ${n5 === 1 ? "suggestion" : "suggestions"}`);
   if (waiting.length) { sections.push(section("Waiting for you", waiting)); choices.push(choice("awaiting", "Review waiting items", { words: ["waiting", "review", "approval"] })); }
   // the first action answers "yes" to the question Home asks, so a teacher can just agree (FR-62, FR-87)
-  if (choices[0] && ["continue", "start_next", "prepare_next", "resume_plan"].includes(choices[0].id)) choices[0] = { ...choices[0], words: [...choices[0].words, "yes", "okay", "sure", "let's do it"] };
+  if (choices[0] && ["continue", "resume_plan"].includes(choices[0].id)) choices[0] = { ...choices[0], words: [...choices[0].words, "yes", "okay", "sure", "let's do it"] };
   const primary = [...choices.filter((c, i) => choices.findIndex((x) => x.id === c.id) === i).slice(0, 3), choice("menu", "More options", { words: ["more", "more options", "menu"] })];
   // spoken like a colleague catching you up, not a list of headings
   const talk = [];
   if (e.draft.justSignedIn) { talk.push(`Hello, ${e.teacher && e.teacher.name}.`); e.draft.justSignedIn = false; }
   let question = "What would you like to do?";
   if (active) { talk.push(`You have a class going on: ${e.lessonName(e.lesson(active.lessonId))}.`); question = "Shall we carry on with it?"; }
-  if (next && !active) {
-    const [en, lx] = next, ch = Curriculum.chapter(en.chapterId), tp = lx ? e.topicOf(lx) : ch ? e.nextTopic(ch) : null;
-    const ok = lx && e.ready(lx);
-    talk.push(`Your next class is on ${en.day}, period ${en.period}: class ${en.classNum} science, ${ch && ch.name}, ${tp && tp.name}. ${ok ? "It's ready to teach." : "It isn't ready yet."}`);
-    question = ok ? "Shall we start the class?" : "Shall we get it ready now?";
-  } else if (!active) {
+  if (!active) {
     const ready = st.lessons.filter((x) => e.ready(x) && !e.taught(x)).length;
     if (ready) talk.push(`You have ${plural(ready, "lesson", "lessons")} ready to teach.`);
-    else if (!st.lessons.length) talk.push("You don't have any lessons yet. I can help you set up your week, or plan a lesson.");
+    else if (!st.lessons.length) talk.push("You don't have any lessons yet. I can tell you what to teach next, or help you plan a lesson.");
     const todo = e.unfinishedLesson();
     if (todo && !ready) { talk.push(`You were planning ${e.lessonName(todo)}.`); question = "Shall we carry on with it?"; }
   }
   if (waiting.length) talk.push(`You ${talk.some((x) => !x.startsWith("Hello")) ? "also " : ""}have ${orList(waiting.map((w) => w.replace(/ waiting for approval$/, " to approve"))).replace(/ or ([^,]*)$/, " and $1")}.`);
   return makeStep("home", Flow.HOME, "Home", question, primary, { announce: talk.join(" ") || null, sections,
-    help: "With the voice guide you can say what you want in one sentence, for example: plan class 7 science for Thursday." });
+    help: "With the voice guide you can say what you want in one sentence, for example: plan the next class 7 science lesson." });
 }

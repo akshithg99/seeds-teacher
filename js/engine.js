@@ -1,13 +1,12 @@
 import { Curriculum, DemoAccounts, LANGS } from "./data.js";
 import { Tier, Source, Flow, makeStep, choice, allChoices, spoken, optionsPhrase, inLang } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
-import { DAYS } from "./matcher.js";
 import * as Offline from "./offline.js";
 import { buildStep, PLANNED_MINUTES } from "./steps.js";
 
 export const emptyState = () => ({
   signedInPhone: null, rememberMe: true, voiceGuide: {}, speechRate: 1, bargeIn: false,
-  classLang: {}, schedule: [], lessons: [], sessions: [], records: [], quizzes: [], patterns: [], events: [], committed: [],
+  classLang: {}, lessons: [], sessions: [], records: [], quizzes: [], patterns: [], events: [], committed: [],
 });
 
 /** The teacher's data. Kept in this browser only (localStorage); `storage` null keeps it in memory (tests). */
@@ -27,18 +26,17 @@ export class Store {
 /** Context the teacher has given so far. Shared by buttons and voice, so switching mode loses nothing (FR-94). */
 class Draft {
   constructor() {
-    this.classNum = null; this.chapterId = null; this.topicId = null; this.day = null; this.period = null;
-    this.scheduleId = null; this.lessonId = null; this.editEntryId = null; this.proposed = null; this.pendingEntries = [];
+    this.classNum = null; this.chapterId = null; this.topicId = null; this.lessonId = null;
     this.sessionId = null; this.recordId = null; this.quizId = null; this.patternId = null;
     this.wsKind = null; this.wsItem = null;
     this.changeCount = 0; this.tries = 0; this.checkpointFor = "tik"; this.lcQueue = []; this.lcIndex = 0;
     this.audioClipId = null; this.justSignedIn = false; this.langFor = null; this.langNext = null;
   }
   clearPlanning() {
-    Object.assign(this, { classNum: null, chapterId: null, topicId: null, day: null, period: null, scheduleId: null, lessonId: null, changeCount: 0, tries: 0, audioClipId: null });
+    Object.assign(this, { classNum: null, chapterId: null, topicId: null, lessonId: null, changeCount: 0, tries: 0, audioClipId: null });
   }
-  snapshot() { const d = new Draft(); Object.assign(d, this, { pendingEntries: [...this.pendingEntries], lcQueue: [...this.lcQueue] }); return d; }
-  restore(o) { Object.assign(this, o, { pendingEntries: [...o.pendingEntries], lcQueue: [...o.lcQueue], justSignedIn: false }); }
+  snapshot() { const d = new Draft(); Object.assign(d, this, { lcQueue: [...this.lcQueue] }); return d; }
+  restore(o) { Object.assign(this, o, { lcQueue: [...o.lcQueue], justSignedIn: false }); }
 }
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -333,17 +331,6 @@ export class Engine {
     this.refresh();
   }
 
-  /** "Thursday", "thu", "today", "tomorrow" -> a school day name. Sunday rolls on to Monday. */
-  dayName(d) {
-    const t = String(d).trim().toLowerCase();
-    const offset = t === "today" ? 0 : t === "tomorrow" ? 1 : null;
-    if (offset != null) {
-      const idx = (new Date(this.now()).getDay() + 6 + offset) % 7; // Monday = 0 ... Sunday = 6
-      return DAYS[idx] || DAYS[0];
-    }
-    return DAYS.find((x) => x.toLowerCase() === t || (t.length >= 3 && x.slice(0, 3).toLowerCase() === t.slice(0, 3))) || null;
-  }
-
   back(source) {
     const prev = this.backStack.pop();
     if (!prev) return "This is the first step. " + this.step.question;
@@ -366,7 +353,6 @@ export class Engine {
   async goTo(flow, source) {
     this.log("go_to", flow.key, source);
     switch (flow.key) {
-      case "SCHEDULE": this.go(this.st.schedule.length ? "sched_view" : "sched_class"); break;
       case "PLAN": {
         const l = this.lesson();
         if (l && !this.taught(l) && !this.planningDone(l)) this.go(this.nextPlanningStep(l));
@@ -391,12 +377,11 @@ export class Engine {
    * Opening request (FR-102): fill each detail caught, read them back in one sentence, and go to the first
    * step still missing a detail. It only fills details and moves; nothing changes or commits here.
    */
-  async fillDetails(intent, classNum, day, period, chapter, topic, source) {
+  async fillDetails(intent, classNum, chapter, topic, source) {
     if (classNum != null && !Curriculum.coveredClasses.includes(classNum)) return `Class ${classNum} is not covered yet. SEEDS covers classes 6, 7 and 9 for now.`;
-    this.log("fill_details", intent, source, [classNum, day, period, chapter, topic].filter((x) => x != null).join(","));
+    this.log("fill_details", intent, source, [classNum, chapter, topic].filter((x) => x != null).join(","));
     const d = this.draft;
     const caught = [], notes = [];
-    const dayNorm = day ? this.dayName(day) : null;
     switch ((intent || "").toLowerCase()) {
       case "next":
         // "What should I teach next?" (J21, FR-106)
@@ -404,26 +389,6 @@ export class Engine {
         if (classNum != null) { d.classNum = classNum; caught.push(`class ${classNum}`, "science"); this.goWithLang(classNum, "next_chapter"); }
         else this.go("next_class");
         break;
-      case "schedule": {
-        d.editEntryId = null;
-        if (classNum != null) { d.classNum = classNum; caught.push(`class ${classNum}`, "science"); }
-        if (dayNorm) { d.day = dayNorm; caught.push(dayNorm); }
-        if (period != null && period >= 1 && period <= 8) { d.period = period; caught.push(`period ${period}`); }
-        if (chapter) {
-          const ch = Curriculum.findChapter(d.classNum, chapter);
-          if (ch && (d.classNum == null || ch.classNum === d.classNum)) { d.chapterId = ch.id; d.classNum = ch.classNum; caught.push(ch.name); }
-          else notes.push(`I didn't find a chapter called ${chapter}.`);
-        }
-        let next;
-        if (d.classNum == null) next = "sched_class";
-        else if (!d.day) next = "sched_day";
-        else if (d.period == null) next = "sched_period";
-        else if (!d.chapterId) next = "sched_chapter";
-        else { this.addPendingEntry(); next = "sched_more"; }
-        if (d.classNum != null || next === "sched_more") this.goWithLang(d.classNum ?? d.pendingEntries[d.pendingEntries.length - 1].classNum, next);
-        else this.go(next);
-        break;
-      }
       case "teach": {
         const ready = this.st.lessons.filter((l) => this.ready(l) && !this.taught(l) && (classNum == null || l.classNum === classNum));
         if (ready.length) { const l = ready[ready.length - 1]; d.lessonId = l.id; this.go("teach_start"); caught.push(this.lessonName(l)); }
@@ -434,12 +399,6 @@ export class Engine {
       default: {
         d.lessonId = null;
         if (classNum != null) { d.classNum = classNum; caught.push(`class ${classNum}`, "science"); }
-        if (dayNorm) {
-          caught.push(dayNorm);
-          const e = this.st.schedule.find((x) => x.day === dayNorm && (d.classNum == null || x.classNum === d.classNum));
-          if (e) { d.scheduleId = e.id; d.classNum = e.classNum; d.chapterId = e.chapterId; }
-          else notes.push(`${dayNorm} isn't on your schedule yet.`);
-        }
         if (chapter) {
           const ch = Curriculum.findChapter(d.classNum, chapter);
           if (ch) { d.chapterId = ch.id; d.classNum = ch.classNum; } else notes.push(`I didn't find a chapter called ${chapter}.`);
@@ -503,25 +462,6 @@ export class Engine {
     return list[i + 1] || list[list.length - 1] || null;
   }
 
-  sortedSchedule() { return [...this.st.schedule].sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.period - b.period); }
-
-  /** The next scheduled lesson from now (FR-62): [entry, lesson or null]. */
-  nextScheduled() {
-    if (!this.st.schedule.length) return null;
-    const now = new Date(this.now());
-    const today = (now.getDay() + 6) % 7; // Monday = 0
-    const curPeriod = Math.min(9, Math.max(0, now.getHours() - 8));
-    const sorted = this.sortedSchedule();
-    const entry = sorted.find((e) => { const d = DAYS.indexOf(e.day); return d > today || (d === today && e.period >= curPeriod); }) || sorted[0];
-    return [entry, this.lessonForEntry(entry)];
-  }
-
-  lessonForEntry(e) {
-    const ls = [...this.st.lessons].reverse();
-    return ls.find((l) => l.scheduleId === e.id && !this.taught(l)) ||
-      ls.find((l) => l.classNum === e.classNum && l.chapterId === e.chapterId && !this.taught(l) && !l.followUpFor) || null;
-  }
-
   previousContext(ch, tp) {
     const s = [...this.st.sessions].reverse().find((x) => { const l = this.lesson(x.lessonId); return x.endedAt != null && x.coverage === "some" && l && l.chapterId === ch.id && l.topicId === tp.id; });
     if (!s) return null;
@@ -556,27 +496,9 @@ export class Engine {
     let ctx;
     if (s.flow === Flow.QUIZ) ctx = d.quizId;
     else if (s.flow === Flow.FOLLOWUP) ctx = d.recordId || d.patternId;
-    else if (s.flow === Flow.SCHEDULE) ctx = `${this.st.schedule.length}${d.pendingEntries.length}${hash(d.proposed)}`;
     else if (s.id === "class_lang") ctx = `${d.langFor}`;
     else { const l = this.lesson(); ctx = `${d.lessonId}:${l ? hash([l.tik, l.questionSets, l.audio]) : 0}`; }
     return `${s.id}:${c.id}:${ctx}`;
-  }
-
-  addPendingEntry() {
-    const d = this.draft;
-    if (d.classNum == null || !d.day || d.period == null || !d.chapterId) return;
-    d.pendingEntries.push({ id: this.newId(), classNum: d.classNum, subject: Curriculum.SUBJECT, day: d.day, period: d.period, chapterId: d.chapterId });
-    d.day = null; d.period = null; d.chapterId = null;
-  }
-
-  entryText(e) { return `${e.day} period ${e.period}: Class ${e.classNum} ${e.subject}, ${(Curriculum.chapter(e.chapterId) || {}).name}`; }
-
-  startPlanningFor(e) {
-    const d = this.draft;
-    d.clearPlanning();
-    d.classNum = e.classNum; d.chapterId = e.chapterId; d.scheduleId = e.id;
-    const nt = this.nextTopic(Curriculum.chapter(e.chapterId)); d.topicId = nt && nt.id;
-    this.go("plan_confirm");
   }
 
   ensureLessonForDraft() {
@@ -584,11 +506,10 @@ export class Engine {
     const ch = Curriculum.chapter(d.chapterId), tp = Curriculum.topic(d.topicId);
     const existing = [...this.st.lessons].reverse().find((l) => l.chapterId === ch.id && l.topicId === tp.id && !this.taught(l) && !l.followUpFor);
     if (existing) {
-      if (d.scheduleId && !existing.scheduleId) this.updateLesson(existing.id, (l) => ({ ...l, scheduleId: d.scheduleId }));
       d.lessonId = existing.id;
       return this.lesson();
     }
-    let l = { id: this.newId(), classNum: ch.classNum, subject: ch.subject, chapterId: ch.id, topicId: tp.id, scheduleId: d.scheduleId,
+    let l = { id: this.newId(), classNum: ch.classNum, subject: ch.subject, chapterId: ch.id, topicId: tp.id,
       tik: null, tikState: "NONE", tikBefore: null, usePreviousContext: false, questionSets: [], questionsSkipped: false,
       audio: [], tikOnly: false, modeChosen: false, followUpFor: null, createdAt: this.now() };
     // Reuse before generate (BR-11): a ready chapter TIK already in the workspace
@@ -629,9 +550,8 @@ export class Engine {
         this.updateLesson(id, (x) => ({ ...x, questionSets: sets }));
       }
       if (!l.audio.length && !l.tikOnly) {
-        const clip = await this.makeClip(l, null, "Audio 1", tp.syncedAudio);
-        this.updateLesson(id, (x) => ({ ...x, audio: [...x.audio, clip] }));
-        this.draft.audioClipId = clip.id;
+        if (!tp.syncedAudio) this.updateLesson(id, (x) => ({ ...x, tikOnly: true }));
+        else { const clip = this.syncedClip(tp); this.updateLesson(id, (x) => ({ ...x, audio: [clip] })); this.draft.audioClipId = clip.id; }
       }
       return true;
     });
@@ -639,15 +559,6 @@ export class Engine {
     this.go("plan_review");
     const t = this.lesson().tik;
     return this.langNote(l0.classNum, t && t.lang).trim();
-  }
-
-  async makeClip(l, variant, name, synced) {
-    const ch = this.chapterOf(l), tp = this.topicOf(l);
-    const lang = this.classLang(l.classNum);
-    if (synced) return { ...this.syncedClip(tp), id: this.newId(), name };
-    const script = await this.gen.audioScript(ch, tp, variant, lang);
-    return { id: this.newId(), name, provenance: "Generated for this lesson", script,
-      lang: this.gen.draftLang(lang), approved: false, reviewed: false, durationSec: Math.round(script.split(/\s+/).length / 2.3) };
   }
 
   /** Content Studio's audio for a topic. Sample: read from the Course text, in English. */
@@ -685,19 +596,18 @@ export class Engine {
     const l = this.lesson(lessonId), tp = this.topicOf(l);
     if (!tp) return;
     const signals = [];
-    let group = 0;
     const s = this.st.sessions.find((x) => x.id === sessionId);
     const r = s && s.checkResults[tp.id];
-    if (r === "few" || r === "none") { signals.push(`Learning check: ${r} of the class understood`); group = Math.max(group, 6); }
+    if (r === "few" || r === "none") signals.push(`Learning check: ${r} of the class could answer`);
     const rec = [...this.st.records].reverse().find((x) => x.sessionId === sessionId && x.saved);
     const note = rec && rec.notes.find((n) => /difficult/i.test(n));
-    if (note) { signals.push(`You noted: "${note.slice(0, 80)}"`); group = Math.max(group, 4); }
-    const q = [...this.st.quizzes].reverse().find((x) => x.lessonId === lessonId && x.state === "Closed" && x.belowThreshold > 0);
-    if (q) { signals.push(`${q.belowThreshold} of ${q.responses} students scored below 35% in the quiz`); group = Math.max(group, q.belowThreshold); }
+    if (note) signals.push(`You noted: "${note.slice(0, 80)}"`);
+    const q = [...this.st.quizzes].reverse().find((x) => x.lessonId === lessonId && x.state === "Closed" && x.wrongPct >= 20);
+    if (q) signals.push(`${q.wrongPct}% of quiz answers were wrong`);
     if (!signals.length) return;
     const existing = this.st.patterns.find((p) => p.lessonId === lessonId && (p.state === "Proposed" || p.state === "Confirmed"));
-    if (existing) this.updatePattern(existing.id, (p) => ({ ...p, signals: [...new Set([...p.signals, ...signals])], groupSize: Math.max(p.groupSize, group) }));
-    else this.store.update((x) => ({ ...x, patterns: [...x.patterns, { id: this.newId(), lessonId, concept: tp.name, signals, groupSize: group, classSize: 12, state: "Proposed", followUp: null }] }));
+    if (existing) this.updatePattern(existing.id, (p) => ({ ...p, signals: [...new Set([...p.signals, ...signals])] }));
+    else this.store.update((x) => ({ ...x, patterns: [...x.patterns, { id: this.newId(), lessonId, concept: tp.name, signals, state: "Proposed", followUp: null }] }));
   }
 
   finishSession() {
@@ -713,7 +623,7 @@ export class Engine {
     if (ended.extensionUsed) facts.push("Extension activity used.");
     Object.entries(ended.checkResults).forEach(([k, v]) => facts.push(`Learning check, ${k === "overview" ? "overview" : (Curriculum.topic(k) || {}).name || k}: ${v}.`));
     const q = [...this.st.quizzes].reverse().find((x) => x.lessonId === s.lessonId && x.state === "Closed");
-    if (q) facts.push(`Quiz: ${q.responses} responses, ${q.belowThreshold} below 35%.`);
+    if (q) facts.push(`Quiz: ${q.responses} students answered, ${q.wrongPct}% of answers wrong.`);
     const rec = { id: this.newId(), sessionId: s.id, lessonId: s.lessonId, createdAt: this.now(), prefilled: facts, notes: [], summary: "", previewed: false, saved: false };
     this.store.update((x) => ({ ...x, records: [...x.records, rec] }));
     this.draft.recordId = rec.id;
@@ -733,21 +643,6 @@ export class Engine {
   }
 
   focusClip(l) { return l.audio.find((a) => a.id === this.draft.audioClipId) || l.audio.find((a) => !a.approved) || l.audio[l.audio.length - 1] || null; }
-
-  nextChapterForSchedule() {
-    const d = this.draft;
-    if (d.classNum == null) return null;
-    const last = [...d.pendingEntries].reverse().find((e) => e.classNum === d.classNum);
-    return last ? this.nextChapter(d.classNum, last.chapterId) : this.nextChapter(d.classNum);
-  }
-
-  proposeEdit(f) {
-    const e = this.st.schedule.find((x) => x.id === this.draft.editEntryId);
-    if (!e) return "That entry is gone.";
-    this.draft.proposed = f(e);
-    this.go("sched_change_confirm");
-    return "";
-  }
 
   simulatedResponses(q) {
     if (!q.openedAt) return 0;
@@ -775,10 +670,6 @@ export class Engine {
       case "home": case "menu":
         switch (c) {
           case "continue": { const a = this.activeSession(); if (a) { d.sessionId = a.id; d.lessonId = a.lessonId; } this.go("teach_step"); return "Continuing your class."; }
-          case "start_next": { const n = this.nextScheduled(); if (n && n[1]) d.lessonId = n[1].id; this.go("teach_start"); break; }
-          case "prepare_next": { const n = this.nextScheduled(); if (n) this.startPlanningFor(n[0]); break; }
-          case "setup_week": d.pendingEntries = []; this.go("sched_class"); return "Your schedule tells the app which class, chapter and topic comes next, so you don't have to say them each time.";
-          case "schedule": this.go(this.st.schedule.length ? "sched_view" : "sched_class"); break;
           case "plan": d.clearPlanning(); this.go("plan_class"); break;
           case "resume_plan": { const l = this.unfinishedLesson(); if (l) { d.clearPlanning(); d.lessonId = l.id; this.go(l.tik ? "plan_review" : this.nextPlanningStep(l)); } break; }
           case "next_topic": this.go("next_class"); break;
@@ -839,74 +730,6 @@ export class Engine {
         this.go(next || "home");
         return said;
       }
-
-      // ---------------- F14 Calendar Scheduling
-      case "sched_class": { const n = parseInt(c.slice(1), 10); d.classNum = n; this.goWithLang(n, "sched_day"); break; }
-      case "sched_day":
-        if (d.editEntryId) return this.proposeEdit((e) => ({ ...e, day: c }));
-        d.day = c; this.go("sched_period"); break;
-      case "sched_period": {
-        const p = parseInt(c.slice(1), 10);
-        if (d.editEntryId) return this.proposeEdit((e) => ({ ...e, period: p }));
-        d.period = p; this.go("sched_chapter"); break;
-      }
-      case "sched_chapter": {
-        const chId = c === "next" ? this.nextChapterForSchedule().id : c;
-        if (d.editEntryId) return this.proposeEdit((e) => ({ ...e, chapterId: chId }));
-        d.chapterId = chId;
-        this.addPendingEntry();
-        this.go("sched_more");
-        return `Added ${this.entryText(d.pendingEntries[d.pendingEntries.length - 1])}.`;
-      }
-      case "sched_more":
-        if (c === "add") { d.classNum = null; this.go("sched_class"); }
-        if (c === "same") { d.pendingEntries = this.st.schedule.map((e) => ({ ...e, id: this.newId() })); this.go("sched_review"); }
-        if (c === "done") this.go("sched_review");
-        break;
-      case "sched_review":
-        if (c === "save") {
-          const n = d.pendingEntries.length, pe = d.pendingEntries;
-          // a new entry in an occupied day and period replaces that one slot only
-          this.store.update((s) => ({ ...s, schedule: [...s.schedule.filter((o) => !pe.some((p) => p.day === o.day && p.period === o.period)), ...pe] }));
-          d.pendingEntries = [];
-          this.goHome();
-          return `Schedule saved. ${n} ${n === 1 ? "class" : "classes"} added to your week.`;
-        }
-        if (c === "change") this.go("sched_pick_pending");
-        if (c === "restart") { d.pendingEntries = []; this.go("sched_class"); }
-        break;
-      case "sched_pick_pending":
-        if (c === "__back_review") { this.go("sched_review"); return ""; }
-        d.pendingEntries = d.pendingEntries.filter((e) => e.id !== c);
-        this.go(d.pendingEntries.length ? "sched_review" : "sched_class");
-        return "Removed that entry.";
-      case "sched_view":
-        if (c === "add") { d.pendingEntries = []; d.classNum = null; this.go("sched_class"); }
-        if (c === "change") this.go("sched_pick");
-        break;
-      case "sched_pick": d.editEntryId = c; this.go("sched_change_field"); break;
-      case "sched_change_field":
-        if (c === "day") this.go("sched_day");
-        if (c === "period") this.go("sched_period");
-        if (c === "chapter") { d.classNum = (this.st.schedule.find((e) => e.id === d.editEntryId) || {}).classNum; this.go("sched_chapter"); }
-        if (c === "remove") {
-          const e = this.st.schedule.find((x) => x.id === d.editEntryId);
-          this.store.update((s) => ({ ...s, schedule: s.schedule.filter((x) => x.id !== d.editEntryId) }));
-          d.editEntryId = null;
-          this.go("sched_view");
-          return `Removed ${e ? this.entryText(e) : "that entry"}. Nothing else moved.`;
-        }
-        break;
-      case "sched_change_confirm":
-        if (c === "apply") {
-          const p = d.proposed;
-          this.store.update((s) => ({ ...s, schedule: s.schedule.map((e) => (e.id === p.id ? p : e)) }));
-          d.proposed = null; d.editEntryId = null;
-          this.go("sched_view");
-          return `Changed. ${this.entryText(p)}. Nothing else moved.`;
-        }
-        if (c === "cancel") { d.proposed = null; d.editEntryId = null; this.go("sched_view"); return "Cancelled. Nothing changed."; }
-        break;
 
       // ---------------- F3 Plan the lesson
       case "plan_class": d.classNum = parseInt(c.slice(1), 10); d.chapterId = null; d.topicId = null; this.go("plan_chapter"); break;
@@ -980,14 +803,8 @@ export class Engine {
         break;
       case "tik_change": if (c === "back") this.go(l && l.tik ? "tik_review" : "tik_view"); break;
       case "checkpoint":
-        if (c === "keep") this.go({ tik: "tik_change", qs: "qs_change", audio: "audio_review" }[d.checkpointFor] || "tik_review");
-        if (c === "stop") this.go({ qs: "qs_review", audio: "audio_review" }[d.checkpointFor] || "tik_review");
-        if (c === "use_cs") {
-          this.updateLesson(l.id, (x) => ({ ...x, audio: x.audio.filter((a) => a.provenance.startsWith("Synced") || a.approved) }));
-          const first = this.lesson().audio[0]; d.audioClipId = first ? first.id : null;
-          this.go("audio_review");
-          return "Using the Content Studio version.";
-        }
+        if (c === "keep") this.go({ tik: "tik_change", qs: "qs_change" }[d.checkpointFor] || "tik_review");
+        if (c === "stop") this.go({ qs: "qs_review" }[d.checkpointFor] || "tik_review");
         break;
 
       // ---------------- F17 questions at planning
@@ -1021,14 +838,12 @@ export class Engine {
 
       // ---------------- F5 Prepare audio
       case "audio_offer":
-        if (c === "prepare") {
-          const clip = await this.working(`Preparing audio for ${tp.name}…`, () => this.makeClip(l, null, "Audio 1", tp.syncedAudio));
-          if (!clip) return this.failed("prepare the audio");
-          this.updateLesson(l.id, (x) => ({ ...x, audio: [...x.audio, clip] }));
-          d.audioClipId = clip.id; d.tries = 0;
-          this.go("audio_review");
-          return clip.provenance.startsWith("Synced") ? "Audio from Content Studio is ready." + this.langNote(l.classNum, clip.lang, true)
-            : "No audio from Content Studio for this topic, so I prepared one. It is not yet reviewed." + this.langNote(l.classNum, clip.lang);
+        if (c === "use" && tp.syncedAudio) {
+          const clip = { ...this.syncedClip(tp), approved: true, reviewed: true };
+          this.updateLesson(l.id, (x) => ({ ...x, audio: [clip] }));
+          d.audioClipId = clip.id;
+          this.go("lesson_saved");
+          return "Using the audio from Content Studio." + this.langNote(l.classNum, clip.lang, true);
         }
         if (c === "tik_only") { this.updateLesson(l.id, (x) => ({ ...x, tikOnly: true })); this.go("lesson_saved"); return ""; }
         break;
@@ -1041,47 +856,23 @@ export class Engine {
             return ok ? "" : "The preview cannot play here. This device may have no voice for this language. You can read the script on screen.";
           }
           case "stop_preview": this.audio.stop(); return "Stopped.";
-          case "approve":
+          case "use":
             this.audio.stop();
             this.updateLesson(l.id, (x) => ({ ...x, audio: x.audio.map((a) => (clip && a.id === clip.id ? { ...a, approved: true, reviewed: true } : a)) }));
             this.go("lesson_saved");
-            return "";
-          case "different": case "again": {
+            return "Using the audio from Content Studio.";
+          case "without":
             this.audio.stop();
-            d.tries++;
-            const n = await this.working(`Finding a different version for ${tp.name}…`, () => this.makeClip(l, "a different way of explaining it, with a new everyday example", clip ? clip.name : "Audio 1", false));
-            if (!n) return this.failed("prepare a different version");
-            // keep the synced original (US-40); replace an earlier unapproved generated try
-            this.updateLesson(l.id, (x) => ({ ...x, audio: [...x.audio.filter((a) => !clip || a.id !== clip.id || a.provenance.startsWith("Synced") || a.approved), n] }));
-            d.audioClipId = n.id;
-            if (d.tries % 3 === 0) { d.checkpointFor = "audio"; this.go("checkpoint"); }
-            return "Here is a different version. It is not yet reviewed." + this.langNote(l.classNum, n.lang);
-          }
-          case "keep_synced": {
-            this.updateLesson(l.id, (x) => ({ ...x, audio: x.audio.filter((a) => !clip || a.id !== clip.id) }));
-            const s = this.lesson().audio.find((a) => a.provenance.startsWith("Synced"));
-            d.audioClipId = s ? s.id : null;
-            return "Keeping the Content Studio version.";
-          }
-          case "discard":
-            this.updateLesson(l.id, (x) => ({ ...x, audio: x.audio.filter((a) => !clip || a.id !== clip.id) }));
+            this.updateLesson(l.id, (x) => ({ ...x, audio: [], tikOnly: true }));
             d.audioClipId = null;
-            this.go(this.lesson().audio.length ? "lesson_saved" : "audio_offer");
-            return "Discarded that extra audio.";
-          case "add": this.go("audio_add"); break;
+            this.go("lesson_saved");
+            return "You'll teach from the TIK, without audio.";
           case "done": this.go("lesson_saved"); break;
         }
         break;
       }
-      case "audio_add": {
-        if (c === "back") { this.go("audio_review"); return ""; }
-        const preset = { slower: "Slower pace", shorter: "Shorter summary", reexplain: "Re-explain one step" }[c];
-        if (preset) return this.makeExtraAudio(preset);
-        break;
-      }
       case "lesson_saved":
         if (c === "open") this.go("teach_start");
-        if (c === "add") this.go("audio_add");
         break;
 
       // ---------------- F6 / F7 Teaching
@@ -1104,9 +895,15 @@ export class Engine {
           this.updateSession(s.id, (x) => ({ ...x, methods: [...x.methods, "audio"] }));
           this.go("audio_player");
         }
+        if (c === "lc") this.go("lc_read");
         if (c === "end") { this.audio.stop(); this.go("end_coverage"); }
         break;
       }
+      case "lc_read":
+        if (c === "read") return l.questionSets.filter((q) => q.approved && q.check.length).map((q) => inLang(q.lang, q.check.join(" "))).join(" ");
+        if (c === "back") this.go("teach_step");
+        if (c === "end") { this.audio.stop(); this.go("end_coverage"); }
+        break;
       case "audio_player": {
         const list = this.approvedAudio(l);
         const clip = list.find((a) => a.id === d.audioClipId) || list[0];
@@ -1256,8 +1053,8 @@ export class Engine {
           let seed = hash(q.id);
           const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
           const correct = q.questions.map(() => Math.floor(responses * (0.45 + rnd() * 0.5)));
-          const below = 1 + Math.floor(rnd() * 4);
-          this.updateQuiz(q.id, (x) => ({ ...x, state: "Closed", responses, perQuestionCorrect: correct, belowThreshold: below }));
+          const wrongPct = Math.round(100 - (100 * correct.reduce((a, b) => a + b, 0)) / (responses * q.questions.length));
+          this.updateQuiz(q.id, (x) => ({ ...x, state: "Closed", responses, perQuestionCorrect: correct, wrongPct }));
           const before = this.st.patterns.length;
           const lastSession = [...this.st.sessions].reverse().find((s) => s.lessonId === q.lessonId);
           this.proposePatterns(q.lessonId, lastSession && lastSession.id);
@@ -1274,31 +1071,28 @@ export class Engine {
       case "followup_pattern": {
         const p = this.st.patterns.find((x) => x.id === d.patternId);
         if (c === "confirm") { this.updatePattern(p.id, (x) => ({ ...x, state: "Confirmed" })); this.go("followup_type"); return "Confirmed."; }
+        if (c === "change") this.go("followup_change");
         if (c === "dismiss") { this.updatePattern(p.id, (x) => ({ ...x, state: "Dismissed" })); this.go("followups"); return "Dismissed."; }
         if (c === "type") this.go("followup_type");
         if (c === "resolved") { this.updatePattern(p.id, (x) => ({ ...x, state: "Resolved" })); this.go("followups"); return "Marked resolved."; }
         if (c === "still") { this.go("followup_type"); return "Still needs work. Choose another follow-up."; }
         break;
       }
+      case "followup_change": if (c === "back") this.go("followup_pattern"); break;
       case "followup_type": {
         const p = this.st.patterns.find((x) => x.id === d.patternId);
         const base = this.lesson(p.lessonId);
         const lang = this.classLang(base.classNum);
         if (c === "tik") {
-          const instr = `A simpler version for the ${p.groupSize} students who have not yet understood ${p.concept}.`;
+          const instr = `A simpler version for a class that has not yet understood ${p.concept}.`;
           const t = await this.working("Preparing a simpler TIK…", () => this.gen.topicTik(this.chapterOf(base), this.topicOf(base), null, instr, null, lang));
           if (!t) return this.failed("prepare the simpler TIK");
-          const nl = { ...base, id: this.newId(), scheduleId: null, tik: t, tikState: "DRAFT", tikBefore: base.tik, usePreviousContext: false, questionSets: [], questionsSkipped: false, audio: [], tikOnly: false, modeChosen: true, followUpFor: p.id, createdAt: this.now() };
+          const nl = { ...base, id: this.newId(), tik: t, tikState: "DRAFT", tikBefore: base.tik, usePreviousContext: false, questionSets: [], questionsSkipped: false, audio: [], tikOnly: false, modeChosen: true, followUpFor: p.id, createdAt: this.now() };
           this.store.update((x) => ({ ...x, lessons: [...x.lessons, nl] }));
           this.updatePattern(p.id, (x) => ({ ...x, followUp: "Simpler TIK" }));
           d.lessonId = nl.id;
           this.go("tik_review");
           return "A simpler TIK is ready for your review." + this.langNote(base.classNum, t.lang);
-        }
-        if (c === "audio") {
-          d.lessonId = base.id;
-          this.updatePattern(p.id, (x) => ({ ...x, followUp: "Audio" }));
-          return this.makeExtraAudio(`A simpler re-explanation of ${p.concept} for students who have not yet understood it`);
         }
         if (c === "quiz") {
           d.lessonId = base.id;
@@ -1318,22 +1112,9 @@ export class Engine {
 
   newQuiz(lessonId, r, provenance) {
     const q = { id: this.newId(), lessonId, checks: r.checks, questions: r.questions, lang: r.lang || "English", provenance, state: "Draft",
-      openUntil: null, openedAt: null, responses: 0, perQuestionCorrect: [], belowThreshold: 0, classSize: 12 };
+      openUntil: null, openedAt: null, responses: 0, perQuestionCorrect: [], wrongPct: 0, classSize: 12 };
     this.store.update((x) => ({ ...x, quizzes: [...x.quizzes, q] }));
     return q;
-  }
-
-  async makeExtraAudio(variant) {
-    const l = this.lesson();
-    const n = l.audio.length + 1;
-    if (n > 3) return "There are already three audio clips for this lesson.";
-    const clip = await this.working("Preparing the extra audio…", () => this.makeClip(l, variant, `Audio ${n}`, false));
-    if (!clip) return this.failed("prepare the extra audio");
-    this.updateLesson(l.id, (x) => ({ ...x, audio: [...x.audio, clip] }));
-    this.draft.audioClipId = clip.id;
-    this.draft.tries = 0;
-    this.go("audio_review");
-    return `Audio ${n} is ready. It is not yet reviewed.` + this.langNote(l.classNum, clip.lang);
   }
 
   async makeTopicTik(need) {
@@ -1387,7 +1168,10 @@ export class Engine {
         this.go("qs_review");
         return "Questions updated. They need your approval.";
       }
-      case "audio_add": return this.makeExtraAudio(text);
+      case "followup_change":
+        this.updatePattern(this.draft.patternId, (x) => ({ ...x, concept: text }));
+        this.go("followup_pattern");
+        return `Changed to ${text}.`;
       case "record_draft":
         this.updateRecord(this.draft.recordId, (x) => ({ ...x, notes: [...x.notes, text], previewed: false }));
         this.refresh();

@@ -13,19 +13,19 @@ You never act on your own. You move the same screens the buttons move, by callin
 
 How to act:
 - If the teacher picked an option (by its word, a synonym or its number), call choose with that option id.
-- If the teacher said a whole request in one sentence (for example "plan class 7 science for Thursday", "set my schedule: class 6 science Monday second period magnets"), call fill_details with only the details you are sure of. Never guess a detail.
+- If the teacher said a whole request in one sentence (for example "plan the next class 7 science lesson", "what should I teach next in class 6"), call fill_details with only the details you are sure of. Never guess a detail.
 - If a confirmation is pending and the teacher clearly confirms, call confirm_pending. If they decline, call cancel_pending.
 - Commands: repeat, back, where_am_i, what_did_you_do, help, home, why (explain the suggestion), voice_off, undo (reverse the last change), next_tab and prev_tab (TIK tabs). Use the command tool. To open a named TIK tab, use open_tab.
 - On a step with free_speech_allowed, if the teacher is describing their class, a change request, a reason or a note, call submit_text with their words, cleaned of filler.
-- If the teacher names a feature (schedule, plan, teaching, quiz, follow-ups, workspace), call go_to. The workspace lists every TIK, audio and quiz from Content Studio and made by the teacher.
+- If the teacher names a feature (plan, teaching, quiz, follow-ups, workspace), call go_to. The workspace lists every TIK, audio and quiz from Content Studio and made by the teacher.
 - If the teacher asks a question about this step or this lesson (what materials are needed, what changed, what is waiting, what comes next), answer it in a sentence from the step description, without calling an action tool, then ask what they would like to do.
 - If you cannot tell what they meant, call not_understood. Do not invent an answer.
-- Outside the journey (general chat or other subjects), say briefly that you can help with: schedule, planning, teaching, quizzes and follow-ups.
+- Outside the journey (general chat or other subjects), say briefly that you can help with: what to teach next, planning, teaching, quizzes and follow-ups.
 
 How to speak, after the tools have run:
 - Talk like a helpful colleague in the staff room, not a phone menu. Plain spoken English for India, warm and brief: one or two short sentences, everyday words. No markdown, lists or emoji. You always speak English. Never read out content that is in Hindi, Tamil or Bengali: say it is on screen, or that the teacher can say "repeat" to hear it in its own voice.
 - Never number the options or say "press" or "say 1". Do not read every option. Say what you did in a few words, then ask one natural question that offers the most likely next step first (the SUGGESTED option if there is one, with its reason if it helps), for example: "Done, the TIK is approved. Shall I prepare the learning check questions?" Mention at most one alternative, and only if it matters. The teacher can always ask "what else can I do?".
-- When you suggest something, give the reason in a few words, taken from the step (its suggestion reason, the teacher's usage history or the schedule), for example: "How about Exploring Magnets? It's where your class is up to."
+- When you suggest something, give the reason in a few words, taken from the step (its suggestion reason, the teacher's usage history or the lesson sequence), for example: "How about Exploring Magnets? It's where your class is up to."
 - When something takes a moment, the app already says what it is doing, so do not repeat that; say the result.
 - Examples of the tone:
   Teacher: "Can you plan tomorrow's class?" You: "Sure. That's class 6 science, Exploring Magnets, poles of a magnet. A TIK from Content Studio is ready. Shall I use it as it is?"
@@ -40,10 +40,8 @@ How to speak, after the tools have run:
 const TOOLS = [
   tool("choose", "Select an option on the current step by its id.", { choice_id: { type: "string", description: "The option id from the step description" } }, ["choice_id"]),
   tool("fill_details", "Opening request: fill the lesson details the teacher said, then go to the first step still missing a detail.", {
-    intent: { type: "string", enum: ["plan", "schedule", "teach", "quiz", "next"] },
+    intent: { type: "string", enum: ["plan", "teach", "quiz", "next"] },
     class_num: { type: "integer", description: "Class or grade number, if said" },
-    day: { type: "string", description: "Day of the week, today or tomorrow, if said" },
-    period: { type: "integer", description: "Period number, if said" },
     chapter: { type: "string", description: "Chapter name as said, if said" },
     topic: { type: "string", description: "Topic name as said, if said" },
   }, ["intent"]),
@@ -52,11 +50,11 @@ const TOOLS = [
   tool("submit_text", "Give free speech to a step that allows it (need statement, change request, note, reason).", { text: { type: "string" } }, ["text"]),
   tool("command", "A fixed voice command. Use help when the teacher asks what they can do or say here.", { name: { type: "string", enum: ["repeat", "back", "where_am_i", "what_did_you_do", "help", "home", "why", "voice_off", "undo", "next_tab", "prev_tab"] } }, ["name"]),
   tool("open_tab", "On a step with tik_tabs, open one TIK tab and read it.", { tab: { type: "string", enum: TikTabs.titles } }, ["tab"]),
-  tool("go_to", "Go to a feature flow, keeping any unfinished draft.", { flow: { type: "string", enum: ["home", "schedule", "plan", "teach", "quiz", "followups", "workspace"] } }, ["flow"]),
+  tool("go_to", "Go to a feature flow, keeping any unfinished draft.", { flow: { type: "string", enum: ["home", "plan", "teach", "quiz", "followups", "workspace"] } }, ["flow"]),
   tool("not_understood", "Use when you cannot tell what the teacher meant."),
 ];
 
-const FLOW_BY_NAME = { schedule: Flow.SCHEDULE, plan: Flow.PLAN, teach: Flow.TEACH, quiz: Flow.QUIZ, followups: Flow.FOLLOWUP, workspace: Flow.WORKSPACE, home: Flow.HOME };
+const FLOW_BY_NAME = { plan: Flow.PLAN, teach: Flow.TEACH, quiz: Flow.QUIZ, followups: Flow.FOLLOWUP, workspace: Flow.WORKSPACE, home: Flow.HOME };
 const num = (v) => (typeof v === "number" ? v : v != null && !isNaN(parseInt(v, 10)) ? parseInt(v, 10) : null);
 
 export class AgentBrain {
@@ -83,7 +81,7 @@ export class AgentBrain {
     let said;
     switch (name) {
       case "choose": said = await e.choose(String(input.choice_id || ""), Source.VOICE); break;
-      case "fill_details": said = await e.fillDetails(input.intent ? String(input.intent) : null, num(input.class_num), input.day ? String(input.day) : null, num(input.period), input.chapter ? String(input.chapter) : null, input.topic ? String(input.topic) : null, Source.VOICE); break;
+      case "fill_details": said = await e.fillDetails(input.intent ? String(input.intent) : null, num(input.class_num), input.chapter ? String(input.chapter) : null, input.topic ? String(input.topic) : null, Source.VOICE); break;
       case "confirm_pending": said = await e.confirmPending(Source.VOICE, this.lastUtterance); break;
       case "cancel_pending": said = e.cancelPending(); break;
       case "submit_text": said = await e.submitText(String(input.text || ""), Source.VOICE); break;

@@ -42,25 +42,15 @@ test("full journey, offline", async () => {
   assert.equal(id(), "home");
   assert.ok(e.voiceGuideOn);
 
-  // J13: set up the week by an opening request (FR-102); a new class asks its language once (FR-109)
-  const said = await e.fillDetails("schedule", 6, "Monday", 2, "magnets", null, Source.VOICE);
+  // an opening request (FR-102); there is no calendar, only the lesson sequence (8.1)
+  const said = await e.fillDetails("plan", 6, "magnets", null, Source.VOICE);
   assert.ok(said.startsWith("Class 6"), said);
-  assert.equal(id(), "class_lang");
-  await choose("Hindi", true); // CHANGE tier: read back first
-  assert.equal(e.classLang(6), "Hindi");
-  assert.equal(id(), "sched_more");
-  await choose("done");
-  assert.equal(id(), "sched_review");
-  await choose("save", true);
-  assert.equal(e.st.schedule.length, 1);
-  assert.equal(id(), "home");
-
-  // J15: Home says the scheduled lesson is not ready and offers Prepare it
-  assert.ok(e.step.choices.some((c) => c.id === "prepare_next"));
-  await choose("prepare_next");
   assert.equal(id(), "plan_confirm");
-  // one yes prepares the whole lesson (language already known: no second ask); nothing is approved yet
-  const prepared = await choose("yes");
+  await choose("yes");
+  assert.equal(id(), "class_lang"); // a new class asks its language once (FR-109)
+  // one yes prepares the whole lesson; nothing is approved yet
+  const prepared = await choose("Hindi", true); // CHANGE tier: read back first
+  assert.equal(e.classLang(6), "Hindi");
   assert.equal(id(), "plan_review");
   assert.match(prepared, /There is only English support./); // FR-111: says it falls back to English
   assert.equal(e.step.announce, "Ready. Please review your lesson.");
@@ -86,22 +76,27 @@ test("full journey, offline", async () => {
   assert.equal(id(), "qs_review"); // reviewing carries on to the next piece
   await choose("approve", true);
   assert.equal(id(), "audio_review");
-  await choose("approve", true);
+  await choose("use"); // Content Studio audio is used as it is, never generated (8.3)
   assert.equal(id(), "lesson_saved");
+  assert.equal(e.step.announce, "Lesson saved and ready to teach.");
 
-  // FR-103: the same commit twice applies once
-  // J3 teach
+  // J3 teach; the learning check comes before End class, and the agent can read it to the class (8.4)
   await choose("open");
   await choose("start");
   assert.equal(id(), "teach_step");
   assert.ok(e.step.inClass);
   await choose("next");
+  await choose("lc");
+  assert.equal(id(), "lc_read");
+  const read = await choose("read");
+  assert.ok(read.includes(e.lesson().questionSets[0].check[0]), read);
   await choose("end", true);
   assert.equal(id(), "end_coverage");
   await choose("some");
   await choose("overview");
   await choose("time");
-  assert.equal(id(), "lc_ask"); // learning check only for what was covered (AC-56.1)
+  assert.equal(id(), "lc_ask"); // the result is given only for what was covered (AC-56.1)
+  assert.deepEqual(e.step.choices.map((c) => c.id), ["few", "some", "many", "none"]);
   await choose("few");
   assert.equal(id(), "record_draft");
   await e.submitText("They found the poles part difficult", Source.BUTTON);
@@ -113,10 +108,14 @@ test("full journey, offline", async () => {
   assert.ok(e.st.records[0].saved);
   assert.equal(e.st.patterns.length, 1);
 
-  // F10: confirm the group, then prepare a simpler TIK through the normal approval gate
+  // F10: follow-up is for the class as a whole; change the concept, confirm, then a simpler TIK through the approval gate
   await choose("followups");
   await choose(e.step.choices[0].id);
   assert.equal(id(), "followup_pattern");
+  assert.ok(!JSON.stringify(e.step).match(/students|group/i), "no student counts or groups");
+  await choose("change");
+  assert.equal(await e.submitText("North and south poles", Source.BUTTON), "Changed to North and south poles.");
+  assert.equal(e.step.question, "North and south poles needs follow-up. Confirm, change or dismiss?");
   await choose("confirm", true);
   assert.equal(id(), "followup_type");
   await choose("tik");
@@ -127,14 +126,13 @@ test("full journey, offline", async () => {
 
 test("a repeated commit applies once (FR-103)", async () => {
   await choose("no");
-  await e.fillDetails("schedule", 9, "Friday", 1, "sound", null, Source.VOICE);
-  await choose("English", true);
-  await choose("done");
-  // the same save arriving twice at once (double tap) applies once
-  const [a, b] = await Promise.all([e.choose("save", Source.BUTTON, true), e.choose("save", Source.BUTTON, true)]);
-  assert.match(a, /Schedule saved/);
-  assert.doesNotMatch(b, /Schedule saved/);
-  assert.equal(e.st.schedule.length, 1);
+  await e.fillDetails("next", 9, null, null, Source.VOICE);
+  assert.equal(id(), "class_lang");
+  // the same change arriving twice at once (double tap) applies once
+  const [a, b] = await Promise.all([e.choose("English", Source.BUTTON, true), e.choose("English", Source.BUTTON, true)]);
+  assert.match(a, /Class 9 is taught in English/);
+  assert.doesNotMatch(b, /taught in English/); // the second tap does not apply it again
+  assert.equal(e.classLang(9), "English");
 });
 
 test("Claude key can be set and removed at runtime", async () => {
@@ -152,18 +150,17 @@ test("Claude key can be set and removed at runtime", async () => {
 
 test("class not covered", async () => {
   await choose("no");
-  const r = await e.fillDetails("plan", 8, null, null, null, null, Source.VOICE);
+  const r = await e.fillDetails("plan", 8, null, null, Source.VOICE);
   assert.match(r, /not covered/);
   assert.equal(id(), "home");
 });
 
 test("opening request fills details and asks only what is missing", async () => {
   await choose("no");
-  const r = await e.fillDetails("plan", 7, "Thursday", null, null, null, Source.VOICE);
-  assert.ok(r.startsWith("Class 7, science, Thursday"), r);
-  // nothing scheduled on Thursday, so it offers where the class is up to, as one yes-or-no question
+  const r = await e.fillDetails("plan", 7, null, null, Source.VOICE);
+  // it offers where the class is up to in the textbook, as one yes-or-no question (8.1)
   assert.equal(id(), "plan_confirm");
-  assert.match(r, /Thursday isn't on your schedule yet\. Start with chapter 1, Nutrition in Plants, topic [^?]+\?$/);
+  assert.match(r, /^Class 7, science\. Start with chapter 1, Nutrition in Plants, topic [^?]+\?$/);
 });
 
 test("matcher: numbers, commands, opening", async () => {
@@ -176,7 +173,7 @@ test("matcher: numbers, commands, opening", async () => {
   assert.deepEqual(match("I want to talk about my students and their needs today", s, null), { type: "none" });
   const o = opening("plan class 7 science for thursday");
   assert.equal(o.classNum, 7);
-  assert.equal(o.day, "Thursday");
+  assert.equal(o.intent, "plan"); // a day is not a detail any more: there is no calendar (8.1)
 });
 
 test("back and what did you do", async () => {
@@ -202,7 +199,7 @@ test("content in another language is marked for its own voice (FR-110)", () => {
 test("cancelling an agent turn applies nothing (FR-99)", async () => {
   await choose("no");
   const cp = e.checkpoint();
-  await e.fillDetails("schedule", 6, "Monday", 2, "magnets", null, Source.VOICE);
+  await e.fillDetails("next", 6, null, null, Source.VOICE);
   await choose("English", true);
   assert.equal(e.classLang(6), "English");
   e.rollback(cp);
@@ -220,7 +217,7 @@ test("the agent talks in plain words, never a numbered menu", async () => {
   await choose("English", true);
   assert.equal(spoken(e.step), "Ready. Please review your lesson. Shall we go through it now?");
   // a suggestion is offered first, and "yes" takes it
-  e.fillDetails("next", null, null, null, null, null, Source.VOICE);
+  e.fillDetails("next", null, null, null, Source.VOICE);
   await choose("c6"); await choose("other");
   assert.equal(spoken(e.step), "Which chapter? How about chapter 1, Exploring Magnets? It comes first in the textbook. Or tell me another one.");
   assert.deepEqual(match("yes", e.step, null), { type: "choose", choiceId: "6-magnets" });
@@ -287,7 +284,7 @@ test("Workspace lists Content Studio items and the teacher's own, and opens each
   await choose("topic_tik");
   await e.submitText("12 students", Source.BUTTON);
   await e.goTo(Flow.WORKSPACE, Source.BUTTON);
-  assert.equal(e.step.sections[1].lines[0], "1 TIK, 1 audio, 0 quizzes"); // the audio made for this topic too
+  assert.equal(e.step.sections[1].lines[0], "1 TIK, 0 audio, 0 quizzes"); // lesson audio is never made in the app (8.3)
   await choose("tiks");
   assert.ok(e.step.sections[1].lines.some((x) => /Poles of a magnet: topic TIK · Not approved yet/.test(x)));
 });

@@ -154,16 +154,14 @@ test("approve cannot be undone", async () => {
   assert.equal(e.undoPoint, null); // FR-98: commits have no undo
 });
 
-test("destructive schedule actions ask first", async () => {
-  await e.fillDetails("schedule", 6, "Monday", 2, "magnets", null, Source.VOICE);
-  await go("done");
-  assert.equal(id(), "sched_review");
-  await e.choose("restart", Source.BUTTON);
-  assert.ok(e.pending, "start over must be confirmed");
-  e.cancelPending();
-  await go("change");
-  await e.choose(e.step.choices[0].id, Source.BUTTON);
-  assert.ok(e.pending, "removing an entry must be confirmed");
+test("lesson audio comes only from Content Studio; without it the lesson is taught from the TIK (8.3)", async () => {
+  e.setClassLang(7, "English");
+  await e.fillDetails("plan", 7, "nutrition", "leaves and chlorophyll", Source.VOICE);
+  assert.equal(e.topicOf({ topicId: e.draft.topicId }).syncedAudio, false);
+  await go("yes");
+  assert.equal(id(), "plan_review");
+  assert.ok(e.lesson().tikOnly && !e.lesson().audio.length);
+  assert.deepEqual(e.step.sections.find((s) => s.heading === "Audio").lines, ["Taught from the TIK, no audio"]);
 });
 
 test("Course questions can be used as they are, with no approval (FR-111)", async () => {
@@ -173,15 +171,14 @@ test("Course questions can be used as they are, with no approval (FR-111)", asyn
   await go("use_course");
   const sets = e.lesson().questionSets;
   assert.ok(sets.every((s) => s.approved && s.discussion.length === 0 && s.check.length === Math.max(1, s.fromCourse)));
-  assert.equal(id(), "audio_review");
+  assert.equal(id(), "lesson_saved"); // this topic has no Content Studio audio, so it is taught from the TIK
 });
 
 test("audio that cannot play falls back to teacher-led in one step (FR-38)", async () => {
   e.audio = { ...noAudio, play: () => false };
-  await openSyncedTik();
-  await go("use_as_is");
+  await go("plan", "c6", "6-magnets", "6-magnets-1", "yes", "tik", "use_as_is"); // a topic with Content Studio audio
   await e.choose("approve", Source.BUTTON, true); // questions
-  await e.choose("approve", Source.BUTTON, true); // audio
+  await e.choose("use", Source.BUTTON); // audio from Content Studio
   await go("open", "start", "audio");
   assert.equal(id(), "audio_player");
   await go("toggle");
@@ -205,10 +202,8 @@ test("opening requests offline", async () => {
   const o = opening("plan seventh class science for tomorrow");
   assert.equal(o.intent, "plan");
   assert.equal(o.classNum, 7);
-  assert.equal(o.day, "tomorrow");
-  const r = await e.fillDetails(o.intent, o.classNum, o.day, null, null, null, Source.VOICE);
-  assert.ok(r.startsWith("Class 7, science, "), r);
-  assert.ok(e.dayName("tomorrow"));
-  await e.fillDetails("next", null, null, null, null, null, Source.VOICE);
+  const r = await e.fillDetails(o.intent, o.classNum, o.chapter, null, Source.VOICE);
+  assert.ok(r.startsWith("Class 7, science. "), r);
+  await e.fillDetails("next", null, null, null, Source.VOICE);
   assert.equal(id(), "next_class");
 });

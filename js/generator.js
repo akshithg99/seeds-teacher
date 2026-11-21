@@ -113,15 +113,6 @@ export class ContentGenerator {
     return this.online ? this.questionSets(ch, topic, tik, lang, request) : Offline.reviseQuestions(current, request);
   }
 
-  /** F5: in-class audio script from the Course. Explanation only, no exam content (FR-24, FR-69). */
-  async audioScript(ch, topic, variant, lang) {
-    if (!this.online) return Offline.audioScript(ch, topic, variant);
-    let u = `Write a 60 to 90 second in-class audio explanation for class ${ch.classNum}.\n${courseText(ch, topic)}`;
-    u += "\nExplanation only. Do not read the textbook word for word. No exam questions, answers or rapid revision, and no discussion questions (those are read to the teacher). Use a warm, slow, spoken style with short pauses marked by full stops.";
-    if (variant) u += `\nThis version should be different in this way: ${variant}`;
-    return this.claude.complete(COMMON + "\n" + guardrails(ch.classNum) + langRule(lang) + "\nThis is a script for audio played to the class through a speaker during the lesson. Return plain text only.", u, { maxTokens: 4000, effort: "low" });
-  }
-
   /** F8: a graded quiz drafted from the topic's Course content (FR-34). */
   async quiz(ch, topic, lang) {
     if (!this.online) return Offline.quiz(ch, topic);

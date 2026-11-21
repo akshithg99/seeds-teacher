@@ -86,7 +86,7 @@ test("one request and one yes plan the whole lesson, then the teacher reviews it
   v.awake = true;
   await v.handle("Plan Class 7 Science for Thursday");
   assert.equal(e.step.id, "plan_confirm");
-  assert.match(out.said.at(-1), /^Class 7, science, Thursday[.] .*Start with chapter 1, Nutrition in Plants, topic [^?]+[?]$/);
+  assert.match(out.said.at(-1), /^Class 7, science[.] Start with chapter 1, Nutrition in Plants, topic [^?]+[?]$/);
   await v.handle("yes");
   assert.equal(e.step.id, "plan_review");
   assert.ok(out.notes.includes("Preparing your lesson."));

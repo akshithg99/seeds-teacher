@@ -8,7 +8,6 @@ export const Source = { BUTTON: "button", VOICE: "voice", SYSTEM: "system" };
 
 export const Flow = {
   HOME: { key: "HOME", label: "Home", words: ["home", "main menu", "start"] },
-  SCHEDULE: { key: "SCHEDULE", label: "Calendar Scheduling", words: ["schedule", "my schedule", "calendar", "my week", "timetable"] },
   PLAN: { key: "PLAN", label: "Content/TIK generation", words: ["plan", "plan a lesson", "prepare", "tik", "lesson plan", "content", "tik generation"] },
   TEACH: { key: "TEACH", label: "Teaching", words: ["teach", "start class", "teaching", "class"] },
   QUIZ: { key: "QUIZ", label: "Assessment/Quiz", words: ["quiz", "assessment", "test"] },

@@ -208,7 +208,7 @@ export function revise(t, request) {
 /** Words the offline reviser understands, said back when a request is not understood. */
 export const REVISE_HINT = "I understand: pairs, groups, shorter, simpler, more examples, levels, touch, remove step 2, add discussion.";
 
-// ---------------------------------------------------------------- questions, audio, quiz
+// ---------------------------------------------------------------- questions, quiz
 
 export function questionSets(ch, tp) {
   const kw = keyword(tp);
@@ -232,18 +232,6 @@ export function reviseQuestions(sets, request) {
   else if (/more|another|add/.test(r)) out = sets.map((s) => ({ ...s, discussion: [...s.discussion, "Can you explain it to the person next to you?"] }));
   else if (/harder|difficult|challenge/.test(r)) out = sets.map((s) => ({ ...s, check: [...s.check, "Why do you think that happens?"] }));
   return out ? out.map((s) => ({ ...s, approved: false })) : null;
-}
-
-export function audioScript(ch, tp, variant) {
-  const v = (variant || "").toLowerCase();
-  const kw = keyword(tp);
-  const defs = tp.definitions;
-  if (v.includes("short")) return `Here is a short summary about ${kw}. ${defs[0]} Remember this one idea. Now, let us talk about it.`;
-  if (v.includes("slow")) return `Let us go slowly today. We will learn about ${tp.name.toLowerCase()}. ` + defs.map((d) => `Listen. ${d} Let me say that again. ${d} `).join("") + "Take a moment to think. Your teacher will now ask you a question.";
-  if (v.includes("re-explain") || v.includes("again") || v.includes("simpl")) return `Let us go over one idea again, step by step. ${defs[0].replace(/, /g, ". ")} Think of something at home that works like this. Hold that thought, and get ready to share it.`;
-  return `Hello everyone. Today we will find out about ${tp.name.toLowerCase()}. Listen carefully. ` +
-    defs.map((d, i) => (i === 0 ? "Here is the first idea. " : "Here is the next idea. ") + d + " ").join("") +
-    `Now think: where have you noticed ${kw} at home, or on the way to school? In a moment, your teacher will ask you to share. Get ready with one example.`;
 }
 
 // pairs that turn a true Course sentence into a false one; first match only

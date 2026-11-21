@@ -2,7 +2,6 @@ import { Tier, FLOWS, allChoices, proposal } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
 import { Curriculum } from "./data.js";
 
-export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /**
  * Deterministic fast path (what a transcript means, worked out on the device before any LLM call).
@@ -85,7 +84,7 @@ export function match(text, step, pending) {
   // instead of its one keyword ("plan") picking a button and the details being lost
   if (!pending && !step.freeSpeech) {
     const o = opening(text);
-    if (o && o.explicit && (o.classNum != null || o.day || o.chapter)) return { type: "open", ...o };
+    if (o && o.explicit && (o.classNum != null || o.chapter)) return { type: "open", ...o };
   }
 
   // short utterance containing a label or word ("yes, approve it")
@@ -94,7 +93,7 @@ export function match(text, step, pending) {
     if (hits.length === 1) return { type: "choose", choiceId: hits[0].id };
   }
 
-  // flow names (AC-48.4): "go to my schedule", "quiz"
+  // flow names (AC-48.4): "go to workspace", "quiz"
   if (wc(t) <= 5) for (const f of FLOWS) if (f.words.some((w) => t === w || t === `go to ${w}` || t === `open ${w}`)) return { type: "goto", flow: f };
 
   // misheard option word ("approved" for "approve"): one clear best match only
@@ -108,7 +107,6 @@ export function match(text, step, pending) {
 }
 
 const classWords = { five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10 };
-const ordinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"];
 
 /** Offline parse of an opening request (FR-102), used when no Claude key is set. Returns null when it is not one. */
 export function opening(text) {
@@ -118,12 +116,8 @@ export function opening(text) {
   const c1 = t.match(/\b(?:class|grade|standard|std)\s+(\d{1,2}(?:th)?|[a-z]+)\b/);
   const c2 = t.match(/\b(\d{1,2}(?:th)?|[a-z]+)\s+(?:class|grade|standard|std)\b/);
   const cls = toNum(c1 && c1[1]) ?? toNum(c2 && c2[1]);
-  const day = DAYS.find((d) => t.includes(d.toLowerCase())) || ["today", "tomorrow"].find((d) => new RegExp(`\\b${d}\\b`).test(t)) || null;
-  const pm = t.match(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth)\s+period|period\s+(\d)/);
-  const period = pm ? (parseInt(pm[2], 10) || ordinals.indexOf(pm[1]) + 1) : null;
   let intent = null;
   if (/what (?:should|do|shall|can) i teach|teach next|what is my lesson plan|what's next/.test(t)) intent = "next";
-  else if (t.includes("schedule") || t.includes("my week") || t.includes("set up")) intent = "schedule";
   else if (t.includes("quiz")) intent = "quiz";
   else if (t.startsWith("teach") || t.includes("start class")) intent = "teach";
   else if (t.includes("plan") || t.includes("prepare") || cls != null) intent = "plan";
@@ -131,7 +125,7 @@ export function opening(text) {
   const ch = Curriculum.findChapter(cls, t);
   // explicit: the teacher said what to do, not only a class ("class 7" alone answers a "Which class?")
   const explicit = intent !== "plan" || /\b(plan|prepare)\b/.test(t);
-  return { intent, classNum: cls, day, period, chapter: ch ? ch.name : null, explicit };
+  return { intent, classNum: cls, chapter: ch ? ch.name : null, explicit };
 }
 
 /** Words the recogniser should expect at this step (FR-101). */
