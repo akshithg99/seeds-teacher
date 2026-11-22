@@ -15,7 +15,8 @@ const poles = Curriculum.topic("6-magnets-2");
 const noAudio = { play: () => true, toggle() {}, replay() {}, stop() {}, isPlaying: () => false, hasMedia: () => false };
 let e;
 const id = () => e.step.id;
-const go = async (...ids) => { for (const c of ids) await e.choose(c, Source.BUTTON); };
+// a long list shows a page at a time: press More options until the choice is on screen
+const go = async (...ids) => { for (const c of ids) { for (let k = 0; k < 5 && !e.step.choices.some((x) => x.id === c) && e.step.choices.some((x) => x.id === "__more"); k++) await e.choose("__more", Source.BUTTON); await e.choose(c, Source.BUTTON); } };
 
 beforeEach(async () => {
   e = new Engine(new Store(null), new ContentGenerator(new Claude("")), noAudio);
@@ -29,7 +30,7 @@ beforeEach(async () => {
 test("topic TIK is in Vision Empower's format and reflects the teacher's words", () => {
   const t = Offline.topicTik(magnets, poles, "12 students, mixed levels, 30 minutes, work in pairs, we have ring magnets", null, null);
   // the format's sections: overview, learn, engage (interest and concept generation), exercises, references, guidelines
-  assert.ok(t.header.includes("Chapter number and name: 1. Exploring Magnets") && t.header.includes("Topic: Poles of a magnet"));
+  assert.ok(t.header.includes("Chapter number and name: 4. Exploring Magnets") && t.header.includes("Topic: Poles of a magnet"));
   assert.ok(t.objectives.length && t.prerequisites && t.keyPoints.length);
   assert.equal(t.interest.length, 1);
   assert.equal(t.concepts[0].topic, "Poles of a magnet");
@@ -177,9 +178,9 @@ test("approve cannot be undone", async () => {
 });
 
 test("lesson audio comes only from Content Studio; without it the lesson is taught from the TIK (8.3)", async () => {
-  e.setClassLang(7, "English");
-  await e.fillDetails("plan", 7, "nutrition", "leaves and chlorophyll", Source.VOICE);
-  assert.equal(e.topicOf({ topicId: e.draft.topicId }).syncedAudio, false);
+  e.setClassLang(9, "English");
+  await e.fillDetails("plan", 9, "motion", "acceleration", Source.VOICE, "Science");
+  assert.equal(e.hasSyncedAudio(e.topicOf({ topicId: e.draft.topicId })), false);
   await go("yes");
   assert.equal(id(), "plan_review");
   assert.ok(e.lesson().tikOnly && !e.lesson().audio.length);
@@ -228,4 +229,17 @@ test("opening requests offline", async () => {
   assert.ok(r.startsWith("Class 7, science. "), r);
   await e.fillDetails("next", null, null, null, Source.VOICE);
   assert.equal(id(), "next_class");
+});
+
+test("a chapter recording synced from Content Studio is offered for every topic of the chapter and played as a file", async () => {
+  e.setClassLang(7, "English");
+  await go("plan", "c7", "Maths", "7m-decimals", "7m-decimals-2", "yes", "tik");
+  await e.choose("approve", Source.BUTTON, true); // the drafted TIK
+  await e.choose("approve", Source.BUTTON, true); // questions
+  assert.equal(id(), "audio_review");
+  const clip = e.lesson().audio[0];
+  assert.deepEqual([clip.src, clip.provenance, clip.name], ["audio/c7-maths-3.mp3", "Synced from Content Studio", "Chapter 3 recording: A Peek Beyond the Point"]);
+  assert.deepEqual(e.step.sections[0].lines, ["A recording, about 114 minutes. Set the speaker volume high."]);
+  await go("use");
+  assert.ok(e.lesson().audio[0].approved);
 });

@@ -241,6 +241,7 @@ export class BargeIn {
 export class LessonPlayer {
   constructor() { this.clip = null; this.parts = []; this.i = 0; this.playing = false; this.token = 0; this.onFinished = null; this.onFailed = null; this.onChange = () => {}; }
   play(clip, onFinished, onFailed) {
+    if (clip.src) return this.playFile(clip, onFinished, onFailed);
     const s = synth();
     const v = voiceFor(clip.lang);
     if (!s || (clip.lang && clip.lang !== "English" && !v)) return false;
@@ -266,13 +267,35 @@ export class LessonPlayer {
     };
     s.speak(u);
   }
+  /** A recording from Content Studio (clip.src): played as a file, so pause and resume keep the place. */
+  playFile(clip, onFinished, onFailed) {
+    this.stop();
+    const a = new Audio(clip.src);
+    const fail = () => { if (this.el !== a) return; this.stop(); if (onFailed) onFailed(); };
+    a.onended = () => { if (this.el !== a) return; this.el = null; this.playing = false; this.clip = null; this.onChange(); if (onFinished) onFinished(); };
+    a.onerror = fail;
+    this.el = a; this.clip = clip; this.playing = true;
+    a.play().catch(fail);
+    this.onChange();
+    return true;
+  }
   toggle() {
     if (!this.clip) return;
+    if (this.el) { if (this.playing) this.el.pause(); else this.el.play().catch(() => {}); this.playing = !this.playing; this.onChange(); return; }
     if (this.playing) { this.playing = false; this.token++; synth().cancel(); } else { this.playing = true; this.next(); }
     this.onChange();
   }
-  replay() { if (!this.clip) return; this.token++; synth().cancel(); this.i = 0; this.playing = true; this.next(); this.onChange(); }
-  stop() { const had = !!this.clip; this.playing = false; this.clip = null; this.token++; if (had && synth()) synth().cancel(); if (had) this.onChange(); }
+  replay() {
+    if (!this.clip) return;
+    if (this.el) { this.el.currentTime = 0; this.el.play().catch(() => {}); this.playing = true; this.onChange(); return; }
+    this.token++; synth().cancel(); this.i = 0; this.playing = true; this.next(); this.onChange();
+  }
+  stop() {
+    const had = !!this.clip; this.playing = false; this.clip = null; this.token++;
+    if (this.el) { const a = this.el; this.el = null; a.pause(); a.removeAttribute("src"); a.load(); }
+    else if (had && synth()) synth().cancel();
+    if (had) this.onChange();
+  }
   isPlaying() { return this.playing; }
   hasMedia() { return !!this.clip; }
   /** The agent was woken: pause the lesson so the two never talk over each other (FR-61). */

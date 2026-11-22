@@ -117,8 +117,8 @@ export function buildStep(e) {
         const playing = e.audio.isPlaying();
         return makeStep("ws_item", Flow.WORKSPACE, "Audio", playing ? "Playing. Stop it?" : "Play it?", [
           playing ? choice("stop", "Stop", { tier: Tier.READ, words: ["stop", "pause"] }) : choice("play", "Play", { tier: Tier.READ, words: ["play", "yes", "play it"] }), back,
-        ], { announce: `${x.title}. About ${Math.max(1, Math.round(x.clip.durationSec / 60))} min.`, known: [...known, ["Length", `${x.clip.durationSec} seconds`]], contentLang: x.clip.lang,
-          sections: [section("What it says", [x.clip.script], { lang: x.clip.lang })], secondary: [homeBtn()] });
+        ], { announce: `${x.title}. About ${Math.max(1, Math.round(x.clip.durationSec / 60))} min.`, known: [...known, ["Length", `About ${Math.max(1, Math.round(x.clip.durationSec / 60))} minutes`]], contentLang: x.clip.lang,
+          sections: x.clip.script ? [section("What it says", [x.clip.script], { lang: x.clip.lang })] : [], secondary: [homeBtn()] });
       }
       const q = x.quiz;
       const next = x.catalog ? choice("use_quiz", "Use this quiz", { words: ["use", "use this quiz", "yes"] })
@@ -329,11 +329,11 @@ export function buildStep(e) {
 
     // ======================================================== F5 Prepare audio
     case "audio_offer":
-      if (!(tp && tp.syncedAudio)) return makeStep("audio_offer", Flow.PLAN, "Audio", "Content Studio has no audio for this topic, so you'll teach from the TIK. Continue?",
+      if (!e.hasSyncedAudio(tp)) return makeStep("audio_offer", Flow.PLAN, "Audio", "Content Studio has no audio for this topic, so you'll teach from the TIK. Continue?",
         [choice("tik_only", "Continue with the TIK", { words: ["continue", "yes", "okay", "tik only"] })], { known: lessonKnown, progress: planProgress(3) });
       return makeStep("audio_offer", Flow.PLAN, "Audio", "Audio from Content Studio is ready. Use it?",
         [choice("use", "Use it", { words: ["use", "use it", "yes"] }), choice("tik_only", "Teach without it", { words: ["without", "teach without it", "no", "tik only"] })],
-        { known: lessonKnown, progress: planProgress(3) });
+        { known: lessonKnown, progress: planProgress(3), announce: ch && ch.audio ? `It is a recording of the whole chapter, about ${ch.audio.minutes} minutes.` : null });
 
     case "audio_review": {
       const clip = l ? e.focusClip(l) : null;
@@ -349,7 +349,8 @@ export function buildStep(e) {
           known: lessonKnown, progress: planProgress(3), contentLang: clip && clip.lang,
           secondary: e.audio.isPlaying() ? [choice("stop_preview", "Stop preview", { words: ["stop preview", "pause"] })] : [],
           sections: clips.map((a) => section(`${a.name} · ${a.provenance}` + (a.approved ? " · in use" : " · not used yet") + (a.lang && a.lang !== "English" ? ` · ${a.lang}` : ""),
-            [`About ${a.durationSec} seconds. Loudness: played by this device's voice, so it cannot be measured here. Set the speaker volume high.`, `Script: ${a.script}`], { lang: a.lang })) });
+            a.src ? [`A recording, about ${Math.round(a.durationSec / 60)} minutes. Set the speaker volume high.`]
+              : [`About ${a.durationSec} seconds. Loudness: played by this device's voice, so it cannot be measured here. Set the speaker volume high.`, `Script: ${a.script}`], { lang: a.lang })) });
     }
 
     case "lesson_saved": {

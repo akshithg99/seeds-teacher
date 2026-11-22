@@ -123,7 +123,7 @@ export function opening(text) {
   else if (t.includes("plan") || t.includes("prepare") || cls != null) intent = "plan";
   if (!intent) return null;
   const subject = /\b(maths?|mathematics)\b/.test(t) ? "Maths" : /\bscience\b/.test(t) ? "Science" : null;
-  const ch = Curriculum.findChapter(cls, t, subject);
+  const ch = Curriculum.findChapter(cls, t.replace(/\b(?:science|maths?|mathematics)\b/g, " "), subject);
   // explicit: the teacher said what to do, not only a class ("class 7" alone answers a "Which class?")
   const explicit = intent !== "plan" || /\b(plan|prepare)\b/.test(t);
   return { intent, classNum: cls, subject, chapter: ch ? ch.name : null, explicit };

@@ -13,6 +13,8 @@ export const DemoAccounts = {
 };
 
 const t = (id, name, definitions, checkQuestions, syncedAudio = false) => ({ id, name, definitions, checkQuestions, syncedAudio });
+/** Audio synced from Content Studio: one recording per chapter, served from the app's audio folder. */
+const csAudio = (file, minutes) => ({ src: "audio/" + file, minutes });
 /** One activity in Vision Empower's TIK format. */
 export const act = (name, materials, prerequisites, objective, flow) => ({ name, materials, prerequisites, objective, flow });
 
@@ -35,7 +37,40 @@ const MATHS = "Maths";
 const chapters = [
   // ---------------- Class 6 ----------------
   {
-    id: "6-magnets", classNum: 6, subject: SUBJECT, number: 1, name: "Exploring Magnets",
+    id: "6-world", classNum: 6, subject: SUBJECT, number: 1, name: "The Wonderful World of Science",
+    objective: "Students see science as a way of asking questions about the world and finding answers by observing and testing.",
+    keyPoints: ["Science is all around us.", "Scientists ask questions, make a guess, test it and draw a conclusion."],
+    topics: [
+      t("6-world-1", "Science around us", ["Science helps us understand the things around us, from cooking to the weather.", "Anyone who asks questions and looks for answers is doing science."], ["Name one thing at home that science helps us understand."]),
+      t("6-world-2", "Asking questions", ["Science begins with curiosity: asking how and why.", "A good question can be answered by observing or testing."], ["What is one question you have about the world around you?"]),
+      t("6-world-3", "The scientific method", ["The scientific method is: observe, ask a question, make a guess, test it, and draw a conclusion.", "If the test does not support the guess, we make a new guess and test again."], ["What do we do after we make a guess?"]),
+    ],
+    audio: csAudio("c6-science-1.mp3", 15),
+  },
+  {
+    id: "6-diversity", classNum: 6, subject: SUBJECT, number: 2, name: "Diversity in the Living World",
+    objective: "Students describe the variety of plants and animals and group them by features they can observe.",
+    keyPoints: ["Living things show great variety, called diversity.", "We group plants and animals by their features."],
+    topics: [
+      t("6-diversity-1", "Variety in plants", ["Plants can be grouped as herbs, shrubs and trees by the kind of stem they have.", "Herbs have soft green stems; trees have thick, hard, woody trunks."], ["Is a mango plant a herb, a shrub or a tree?"]),
+      t("6-diversity-2", "Leaves and roots", ["Some leaves have veins in a net-like pattern; others have veins running side by side.", "Some plants have one main tap root; others have many thin fibrous roots."], ["What kind of roots does grass have?"]),
+      t("6-diversity-3", "Animals and their habitats", ["The place where a plant or animal lives is its habitat.", "Animals have features that help them live in their habitat, such as the camel's long legs in the desert."], ["How does a fish's body help it live in water?"]),
+    ],
+    audio: csAudio("c6-science-2.mp3", 63),
+  },
+  {
+    id: "6-eating", classNum: 6, subject: SUBJECT, number: 3, name: "Mindful Eating: A Path to a Healthy Body",
+    objective: "Students name the components of food and explain why a balanced diet keeps the body healthy.",
+    keyPoints: ["Food has carbohydrates, proteins, fats, vitamins and minerals.", "A balanced diet has all of them in the right amounts, with roughage and water."],
+    topics: [
+      t("6-eating-1", "Food we eat", ["People in different regions eat different foods, depending on what grows there.", "Eating mindfully means paying attention to what and how much we eat."], ["Name one food that is grown near your home."]),
+      t("6-eating-2", "Components of food", ["Carbohydrates and fats give energy; proteins help the body grow and repair.", "Vitamins and minerals keep us healthy, and roughage helps digestion."], ["Which component of food helps the body grow?"]),
+      t("6-eating-3", "Balanced diet", ["A balanced diet has all the components of food in the right amounts.", "A lack of a component for a long time can cause a deficiency disease."], ["Why should we not eat only one kind of food every day?"]),
+    ],
+    audio: csAudio("c6-science-3.mp3", 54),
+  },
+  {
+    id: "6-magnets", classNum: 6, subject: SUBJECT, number: 4, name: "Exploring Magnets",
     objective: "Students find out which materials a magnet attracts, where its pull is strongest, and how two magnets push or pull each other.",
     keyPoints: ["A magnet attracts iron, nickel and cobalt.", "Every magnet has a north pole and a south pole.", "Like poles repel and unlike poles attract."],
     topics: [
@@ -92,7 +127,7 @@ const chapters = [
     },
   },
   {
-    id: "6-measure", classNum: 6, subject: SUBJECT, number: 2, name: "Measurement of Length and Motion",
+    id: "6-measure", classNum: 6, subject: SUBJECT, number: 5, name: "Measurement of Length and Motion",
     objective: "Students measure length in standard units and describe different kinds of motion.",
     keyPoints: ["The metre is the standard unit of length.", "Motion can be linear, circular or periodic."],
     topics: [
@@ -102,7 +137,7 @@ const chapters = [
     ],
   },
   {
-    id: "6-temp", classNum: 6, subject: SUBJECT, number: 3, name: "Temperature and its Measurement",
+    id: "6-temp", classNum: 6, subject: SUBJECT, number: 7, name: "Temperature and its Measurement",
     objective: "Students describe hotness and coldness as temperature and measure it safely.",
     keyPoints: ["Temperature tells how hot or cold something is.", "Temperature is measured in degrees Celsius."],
     topics: [
@@ -113,34 +148,37 @@ const chapters = [
   },
   // ---------------- Class 7 ----------------
   {
-    id: "7-nutrition", classNum: 7, subject: SUBJECT, number: 1, name: "Nutrition in Plants",
-    objective: "Students explain how green plants make their own food and name other modes of nutrition in plants.",
-    keyPoints: ["Green plants make food by photosynthesis.", "Leaves are the food factories of the plant."],
+    id: "7-world", classNum: 7, subject: SUBJECT, number: 1, name: "The Ever-Evolving World of Science",
+    objective: "Students see that scientific ideas grow and change as people observe, question and test.",
+    keyPoints: ["Science is a way of finding out, not a fixed list of facts.", "Ideas in science change when new evidence is found."],
     topics: [
-      t("7-nutrition-1", "Photosynthesis", ["Green plants make their own food using sunlight, water and carbon dioxide. This process is called photosynthesis.", "Oxygen is given out during photosynthesis."], ["What three things does a plant need to make its food?"], true),
-      t("7-nutrition-2", "Leaves and chlorophyll", ["Leaves contain a green substance called chlorophyll.", "Chlorophyll helps leaves use sunlight to make food."], ["Why are leaves called the food factories of a plant?"]),
-      t("7-nutrition-3", "Other modes of nutrition", ["Some plants, like Cuscuta, take food from other plants. They are parasites.", "Insectivorous plants, like the pitcher plant, trap insects for nutrients."], ["How does a pitcher plant get some of its nutrients?"]),
+      t("7-world-1", "Science in everyday life", ["We use science every day, for example when we cook, travel or use a phone.", "Science helps us make sense of what we observe."], ["Name one way you used science today."]),
+      t("7-world-2", "Curiosity and questions", ["Curiosity leads to questions, and questions lead to discoveries.", "Observing carefully helps us ask better questions."], ["What makes a question easy to test?"]),
+      t("7-world-3", "Science keeps changing", ["Scientific ideas change when new evidence is found.", "Scientists share their findings so others can check them."], ["Why do scientists share their findings?"]),
     ],
+    audio: csAudio("c7-science-1.mp3", 15),
   },
   {
-    id: "7-heat", classNum: 7, subject: SUBJECT, number: 2, name: "Heat",
-    objective: "Students describe how heat moves by conduction, convection and radiation.",
-    keyPoints: ["Heat flows from a hotter object to a colder one.", "Heat moves by conduction, convection and radiation."],
+    id: "7-substances", classNum: 7, subject: SUBJECT, number: 2, name: "Exploring Substances: Acidic, Basic, and Neutral",
+    objective: "Students group substances as acidic, basic or neutral using indicators and describe neutralisation.",
+    keyPoints: ["Indicators tell us whether a substance is acidic, basic or neutral.", "An acid and a base cancel each other out in neutralisation."],
     topics: [
-      t("7-heat-1", "Hot and cold objects", ["Heat flows from a hotter object to a colder object."], ["If you hold a cold glass of water, which way does heat flow?"]),
-      t("7-heat-2", "Conduction", ["In conduction, heat moves through a solid from the hotter end to the colder end.", "Metals are good conductors. Wood and plastic are poor conductors."], ["Why do cooking pans often have wooden or plastic handles?"]),
-      t("7-heat-3", "Convection and radiation", ["In convection, heat is carried by moving water or air.", "In radiation, heat travels without any material, like heat from the sun."], ["How does heat from the sun reach us?"]),
+      t("7-substances-1", "Acids and bases", ["Acids, like lemon juice and vinegar, are often sour.", "Bases, like soap solution, often feel slippery. We never taste or touch unknown substances to test them."], ["Is lemon juice an acid or a base?"]),
+      t("7-substances-2", "Indicators", ["An indicator changes colour in an acid or a base.", "Turmeric turns red in a base; blue litmus turns red in an acid."], ["What does an indicator do?"]),
+      t("7-substances-3", "Neutralisation", ["When an acid and a base are mixed in the right amounts, they cancel each other out. This is neutralisation.", "An antacid relieves acidity in the stomach by neutralisation."], ["Why does an antacid help with stomach acidity?"]),
     ],
+    audio: csAudio("c7-science-2.mp3", 42),
   },
   {
-    id: "7-electric", classNum: 7, subject: SUBJECT, number: 3, name: "Electric Current and its Effects",
-    objective: "Students build simple circuits and describe the heating and magnetic effects of electric current.",
-    keyPoints: ["A closed circuit lets current flow.", "Electric current produces heat and magnetism."],
+    id: "7-electric", classNum: 7, subject: SUBJECT, number: 3, name: "Electricity: Circuits and their Components",
+    objective: "Students build a simple circuit and sort materials into conductors and insulators.",
+    keyPoints: ["Current flows only in a closed circuit.", "Conductors let current pass; insulators do not."],
     topics: [
-      t("7-electric-1", "Electric circuits", ["Current flows only when the circuit is closed.", "A switch opens or closes a circuit."], ["What happens to the bulb when the switch is open?"]),
-      t("7-electric-2", "Heating effect of current", ["A wire gets hot when current flows through it.", "Electric irons and heaters use this heating effect."], ["Name one appliance at home that uses the heating effect of current."]),
-      t("7-electric-3", "Magnetic effect of current", ["A wire carrying current behaves like a magnet.", "An electromagnet is made by winding wire around an iron nail."], ["How can we make an electromagnet?"]),
+      t("7-electric-1", "Electric cell", ["An electric cell has a positive terminal and a negative terminal.", "Two or more cells joined together make a battery."], ["How many terminals does a cell have?"]),
+      t("7-electric-2", "Electric circuits", ["Current flows only when the circuit is closed.", "A switch opens or closes a circuit."], ["What happens to the bulb when the switch is open?"]),
+      t("7-electric-3", "Conductors and insulators", ["Materials that let current pass, such as metals, are conductors.", "Materials that do not, such as plastic, rubber and wood, are insulators."], ["Why are electric wires covered with plastic?"]),
     ],
+    audio: csAudio("c7-science-3.mp3", 60),
   },
   // ---------------- Class 9 ----------------
   {
@@ -236,58 +274,41 @@ const chapters = [
   },
   // ---------------- Class 7 ----------------
   {
-    id: "7m-integers", classNum: 7, subject: MATHS, number: 1, name: "Integers",
-    objective: "Students use positive and negative numbers and add and subtract them.",
-    keyPoints: ["Integers are whole numbers and their negatives.", "Adding a negative number is the same as subtracting."],
+    id: "7m-large", classNum: 7, subject: MATHS, number: 1, name: "Large Numbers Around Us",
+    objective: "Students read, write and estimate large numbers using lakhs and crores.",
+    keyPoints: ["One lakh is one hundred thousand; one crore is one hundred lakh.", "Estimating gives a quick, close answer."],
     topics: [
-      t("7m-integers-1", "Positive and negative numbers", ["Integers are the whole numbers and their negatives, such as minus 3, 0 and 5.", "Numbers below zero, such as a temperature of minus 2 degrees, are negative."], ["Which is bigger, minus 5 or minus 2?"]),
-      t("7m-integers-2", "Adding integers", ["Adding a positive number moves up the number line.", "Adding a negative number moves down the number line."], ["What is 4 plus minus 6?"]),
-      t("7m-integers-3", "Subtracting integers", ["Subtracting a number is the same as adding its opposite.", "5 minus minus 2 is the same as 5 plus 2, which is 7."], ["What is 3 minus minus 4?"]),
+      t("7m-large-1", "Lakhs and crores", ["One lakh is 1,00,000, which is one hundred thousand.", "One crore is 1,00,00,000, which is one hundred lakh."], ["How many lakhs make one crore?"]),
+      t("7m-large-2", "Reading and writing large numbers", ["In the Indian system, we group digits as ones, thousands, lakhs and crores.", "Saying each group by its name helps us read a large number aloud."], ["Read this number aloud: 2,50,000."]),
+      t("7m-large-3", "Estimating large numbers", ["To estimate, we round numbers to the nearest thousand, lakh or crore.", "An estimate is close to the exact answer, not equal to it."], ["About how many people live in your village or town?"]),
     ],
+    audio: csAudio("c7-maths-1.mp3", 79),
   },
   {
-    id: "7m-fractions", classNum: 7, subject: MATHS, number: 2, name: "Fractions and Decimals",
-    objective: "Students multiply and divide fractions and work with decimals.",
-    keyPoints: ["To multiply fractions, multiply the tops and multiply the bottoms.", "A decimal is another way to write a fraction with 10, 100 or 1000 at the bottom."],
+    id: "7m-arith", classNum: 7, subject: MATHS, number: 2, name: "Arithmetic Expressions",
+    objective: "Students write arithmetic expressions and find their values in the right order.",
+    keyPoints: ["An expression is numbers joined by operations.", "Brackets first, then multiplication and division, then addition and subtraction."],
     topics: [
-      t("7m-fractions-1", "Multiplying fractions", ["To multiply two fractions, multiply the numerators and multiply the denominators.", "Half of a quarter is one eighth."], ["What is one half times one third?"]),
-      t("7m-fractions-2", "Dividing fractions", ["To divide by a fraction, multiply by its reciprocal.", "The reciprocal of two thirds is three halves."], ["What is the reciprocal of three quarters?"]),
-      t("7m-fractions-3", "Decimals", ["A decimal shows parts of a whole after the decimal point.", "0.5 is the same as one half."], ["Which is bigger, 0.5 or 0.25?"]),
+      t("7m-arith-1", "Writing expressions", ["An arithmetic expression is numbers joined by operations, such as 12 plus 3 times 4.", "The value of an expression is the number it works out to."], ["Write an expression for: 5 pens at 10 rupees each."]),
+      t("7m-arith-2", "Order of operations", ["Work out brackets first, then multiplication and division, then addition and subtraction.", "12 plus 3 times 4 is 12 plus 12, which is 24."], ["What is 2 plus 3 times 5?"]),
+      t("7m-arith-3", "Comparing expressions", ["Two expressions can have the same value even if they look different.", "6 times 4 and 4 times 6 have the same value."], ["Do 10 minus 3 and 3 minus 10 have the same value?"]),
     ],
+    audio: csAudio("c7-maths-2.mp3", 81),
   },
   {
-    id: "7m-equations", classNum: 7, subject: MATHS, number: 3, name: "Simple Equations",
-    objective: "Students write simple equations and solve them by balancing both sides.",
-    keyPoints: ["An equation says two things are equal.", "Doing the same thing to both sides keeps an equation balanced."],
+    id: "7m-decimals", classNum: 7, subject: MATHS, number: 3, name: "A Peek Beyond the Point",
+    objective: "Students use tenths and hundredths and write them as decimals.",
+    keyPoints: ["A decimal shows parts of a whole after the point.", "One tenth is 0.1 and one hundredth is 0.01."],
     topics: [
-      t("7m-equations-1", "What an equation is", ["An equation says that two expressions are equal, such as x plus 3 equals 7.", "The letter stands for a number we do not know yet."], ["In x plus 3 equals 7, what does x stand for?"]),
-      t("7m-equations-2", "Solving an equation", ["To solve an equation, do the same thing to both sides until the letter is alone.", "If x plus 3 equals 7, take 3 from both sides, so x equals 4."], ["Solve: x minus 2 equals 5."]),
-      t("7m-equations-3", "Equations from word problems", ["A word problem can be written as an equation by naming the unknown with a letter.", "If 3 pens cost 30 rupees, then 3 times p equals 30, so p equals 10."], ["Write an equation: a number plus 6 is 10."]),
+      t("7m-decimals-1", "Fractional units", ["When one whole is split into 10 equal parts, each part is one tenth.", "When one whole is split into 100 equal parts, each part is one hundredth."], ["How many tenths make one whole?"]),
+      t("7m-decimals-2", "Decimal notation", ["One tenth is written 0.1 and one hundredth is written 0.01.", "In 3.5, the 3 is ones and the 5 is tenths."], ["How do we write five tenths as a decimal?"]),
+      t("7m-decimals-3", "Comparing decimals", ["To compare decimals, compare the ones first, then the tenths, then the hundredths.", "0.5 is bigger than 0.25, because 5 tenths is more than 2 tenths."], ["Which is bigger, 0.7 or 0.65?"]),
     ],
+    audio: csAudio("c7-maths-3.mp3", 114),
   },
   // ---------------- Class 9 ----------------
   {
-    id: "9m-numsys", classNum: 9, subject: MATHS, number: 1, name: "Number Systems",
-    objective: "Students tell rational and irrational numbers apart and place real numbers on the number line.",
-    keyPoints: ["A rational number can be written as p over q, with q not zero.", "Rational and irrational numbers together are the real numbers."],
-    topics: [
-      t("9m-numsys-1", "Rational numbers", ["A rational number can be written as p over q, where p and q are integers and q is not zero.", "Every integer is a rational number, because 5 is 5 over 1."], ["Is 0.75 a rational number? Write it as a fraction."]),
-      t("9m-numsys-2", "Irrational numbers", ["An irrational number cannot be written as p over q.", "The square root of 2 is irrational; its decimal goes on without repeating."], ["Is the square root of 9 rational or irrational?"]),
-      t("9m-numsys-3", "Real numbers on the number line", ["Every real number has a place on the number line.", "Between any two real numbers there are infinitely many others."], ["Name a number between 1 and 2."]),
-    ],
-  },
-  {
-    id: "9m-poly", classNum: 9, subject: MATHS, number: 2, name: "Polynomials",
-    objective: "Students identify polynomials, their degree and zeroes, and factorise simple ones.",
-    keyPoints: ["The degree of a polynomial is its highest power.", "A zero of a polynomial makes its value zero."],
-    topics: [
-      t("9m-poly-1", "Polynomials in one variable", ["A polynomial in one variable is a sum of terms with whole-number powers of that variable.", "The degree is the highest power, so x squared plus 3x has degree 2."], ["What is the degree of 4x cubed plus x?"]),
-      t("9m-poly-2", "Zeroes of a polynomial", ["A zero of a polynomial is a value of x that makes the polynomial equal to zero.", "2 is a zero of x minus 2."], ["What is the zero of x plus 5?"]),
-      t("9m-poly-3", "Factorising polynomials", ["Factorising writes a polynomial as a product of simpler polynomials.", "x squared minus 9 factorises as x plus 3 times x minus 3."], ["Factorise x squared minus 4."]),
-    ],
-  },
-  {
-    id: "9m-coord", classNum: 9, subject: MATHS, number: 3, name: "Coordinate Geometry",
+    id: "9m-coord", classNum: 9, subject: MATHS, number: 1, name: "Orienting Yourself: The Use of Coordinates",
     objective: "Students describe the position of a point with coordinates and name the quadrants.",
     keyPoints: ["A point is described by its x and y coordinates.", "The two axes divide the plane into four quadrants."],
     topics: [
@@ -295,6 +316,29 @@ const chapters = [
       t("9m-coord-2", "Plotting a point", ["The coordinates 3, 2 mean 3 along the x-axis and 2 up the y-axis.", "The x coordinate is always said first."], ["Which coordinate do we say first?"]),
       t("9m-coord-3", "Quadrants", ["The axes divide the plane into four quadrants.", "In the first quadrant, both coordinates are positive."], ["In which quadrant is the point 2, 5?"]),
     ],
+    audio: csAudio("c9-maths-1.mp3", 54),
+  },
+  {
+    id: "9m-poly", classNum: 9, subject: MATHS, number: 2, name: "Introduction to Linear Polynomials",
+    objective: "Students recognise linear polynomials, find their zero and see how they describe steady change.",
+    keyPoints: ["A linear polynomial has degree 1, like 2x plus 3.", "The zero of a linear polynomial is the value of x that makes it zero."],
+    topics: [
+      t("9m-poly-1", "Linear expressions", ["A linear polynomial has the form a x plus b, where a is not zero.", "Its degree is 1, because the highest power of x is 1."], ["Is x squared plus 1 a linear polynomial?"]),
+      t("9m-poly-2", "Zero of a linear polynomial", ["The zero of a linear polynomial is the value of x that makes it equal to zero.", "The zero of x minus 4 is 4."], ["What is the zero of x plus 2?"]),
+      t("9m-poly-3", "Linear patterns", ["A linear polynomial grows by the same amount each time x goes up by 1.", "If a taxi charges 20 rupees plus 10 rupees per kilometre, the cost is 10x plus 20."], ["How much does the cost go up for each extra kilometre in 10x plus 20?"]),
+    ],
+    audio: csAudio("c9-maths-2.mp3", 81),
+  },
+  {
+    id: "9m-numsys", classNum: 9, subject: MATHS, number: 3, name: "The World of Numbers",
+    objective: "Students tell rational and irrational numbers apart and place real numbers on the number line.",
+    keyPoints: ["A rational number can be written as p over q, with q not zero.", "Rational and irrational numbers together are the real numbers."],
+    topics: [
+      t("9m-numsys-1", "Rational numbers", ["A rational number can be written as p over q, where p and q are integers and q is not zero.", "Every integer is a rational number, because 5 is 5 over 1."], ["Is 0.75 a rational number? Write it as a fraction."]),
+      t("9m-numsys-2", "Irrational numbers", ["An irrational number cannot be written as p over q.", "The square root of 2 is irrational; its decimal goes on without repeating."], ["Is the square root of 9 rational or irrational?"]),
+      t("9m-numsys-3", "Real numbers on the number line", ["Every real number has a place on the number line.", "Between any two real numbers there are infinitely many others."], ["Name a number between 1 and 2."]),
+    ],
+    audio: csAudio("c9-maths-3.mp3", 100),
   },
 ];
 
