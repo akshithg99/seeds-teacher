@@ -281,7 +281,7 @@ export class Engine {
         return `I suggested ${c ? c.label : s.suggestion.choiceId} ${s.suggestion.reason}.`;
       }
       case "undo": return this.undo(source);
-      case "audio_pause": if (this.audio.isPlaying()) this.audio.toggle(); return "Paused.";
+      case "audio_pause": if (this.audio.isPlaying()) this.audio.toggle(); return this.audio.hasMedia() ? "Paused." : "The audio is not playing.";
       case "next_tab": return s.tik ? this.selectTab(this.tikTab + 1) : "There are no tabs here.";
       case "prev_tab": return s.tik ? this.selectTab(this.tikTab - 1) : "There are no tabs here.";
       case "sign_out": this.signOut(); this.notify(source); return "Signed out.";
@@ -623,6 +623,7 @@ export class Engine {
     if (to != null && !clip.src) return "Moving around works only in recordings.";
     if (to != null && to >= dur) return `The recording is only ${Math.round(dur / 60)} minutes long.`;
     const start = to != null ? Math.max(0, to) : finished ? 0 : pos;
+    if (this.route.id === "teach_step") { const s = this.session(); if (s) this.updateSession(s.id, (x) => ({ ...x, methods: [...x.methods, "audio"] })); this.draft.audioClipId = clip.id; }
     if (this.route.id !== "audio_player") this.go("audio_player");
     if (!has) {
       if (!this.audio.play(clip, () => this.onAudioFinished(), () => this.onAudioFailed(), start)) { this.onAudioFailed(); return "Audio is not playing."; }

@@ -6,7 +6,7 @@ import { TikTabs } from "./tiktabs.js";
 const NOT_APPROVED = "Created by SEEDS PROJECT-B — not yet approved";
 const PLAN_STAGES = ["Lesson", "TIK", "Questions", "Audio", "Ready"];
 // what a teacher can say about a recording; the voice button pauses the audio first
-const AUDIO_HELP = "While the audio plays, press the voice button and say: pause, play, back 30 seconds, forward 1 minute, jump to minute 20, from the beginning, faster, slower, or speed 1.5.";
+const AUDIO_HELP = "Here or while the audio plays (press the voice button first), say: pause, play, back 30 seconds, forward 1 minute, jump to minute 20, from the beginning, faster, slower, or speed 1.5.";
 const PERIOD_MINUTES = 40; // shortcut: a fixed period length, until the teacher's timetable gives the real one
 const planProgress = (stage) => ({ labels: PLAN_STAGES, current: stage });
 const numberWord = (n) => ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] || String(n);
@@ -363,6 +363,8 @@ export function buildStep(e) {
           ...(hasQs ? [choice("lc", "Learning check", { words: ["learning check", "questions", "the questions"] })] : []),
           choice("end", "End class", { tier: Tier.COMMIT, words: ["end class", "end"], commitWord: "end class", readBack: "I'll end the class and ask what was covered." }),
         ], { announce: cur ? `${cur.name}. ` + inLang(tl, [...cur.lines, ...cur.acts.map(TikTabs.actText)].join(" ")) : null, inClass: true, contentLang: tl,
+          audio: hasAudio, // "jump to minute 20" here opens the audio and plays from there
+          help: hasAudio ? "For the lesson audio: " + AUDIO_HELP : null,
           known: [["Lesson", e.lessonName(l)], ["Method", "Your choice: activity, teacher-led, audio, discussion or tactile materials"]],
           sections: [...(i === 0 && learn.length ? [section("What students learn (Course)", learn)] : []),
             ...(cur && cur.lines.length ? [section(cur.name, cur.lines, { lang: tl })] : []),

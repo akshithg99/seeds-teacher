@@ -247,6 +247,13 @@ test("in class, voice moves around the recording, and the next class carries on 
   assert.equal(say("go to minute 500"), `The recording is only ${Math.round(dur / 60)} minutes long.`);
   assert.equal(rec.pos, 1200);
   await go("back"); // stopping saves the place
+  // from the TIK step screen too: it opens the audio and plays from there
+  assert.equal(id(), "teach_step");
+  assert.equal(say("pause"), "The audio is not playing.");
+  say("back 30 seconds");
+  assert.equal(id(), "audio_player");
+  assert.ok(rec.playing && rec.at === 1170);
+  rec.pos = 1200; await go("back");
   // the next class: the recording carries on from there
   await go("audio");
   assert.deepEqual(e.step.known.at(-1), ["Carries on from", "20:00, where you stopped"]);
