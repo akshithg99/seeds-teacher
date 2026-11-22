@@ -200,8 +200,7 @@ test("Course questions can be used as they are, with no approval (FR-111)", asyn
 test("audio that cannot play falls back to teacher-led in one step (FR-38)", async () => {
   e.audio = { ...noAudio, play: () => false };
   e.setClassLang(7, "English");
-  await go("plan", "c7", "Maths", "7m-decimals", "7m-decimals-2", "yes", "tik"); // a chapter with a Content Studio recording
-  await e.choose("approve", Source.BUTTON, true); // the drafted TIK
+  await go("plan", "c7", "Maths", "7m-decimals", "7m-decimals-2", "yes", "tik", "use_as_is"); // a chapter with a Content Studio TIK and recording
   await e.choose("approve", Source.BUTTON, true); // questions
   await e.choose("use", Source.BUTTON); // the recording
   await go("open", "start", "audio");
@@ -235,8 +234,8 @@ test("opening requests offline", async () => {
 
 test("a chapter recording synced from Content Studio is offered for every topic of the chapter and played as a file", async () => {
   e.setClassLang(7, "English");
-  await go("plan", "c7", "Maths", "7m-decimals", "7m-decimals-2", "yes", "tik");
-  await e.choose("approve", Source.BUTTON, true); // the drafted TIK
+  await go("plan", "c7", "Maths", "7m-decimals", "7m-decimals-2", "yes", "tik", "use_as_is");
+  assert.equal(e.lesson().tikState, "SYNCED_IN_USE"); // the chapter's TIK comes from Content Studio too
   await e.choose("approve", Source.BUTTON, true); // questions
   assert.equal(id(), "audio_review");
   const clip = e.lesson().audio[0];
@@ -244,4 +243,15 @@ test("a chapter recording synced from Content Studio is offered for every topic 
   assert.deepEqual(e.step.sections[0].lines, ["A recording, about 114 minutes. Set the speaker volume high."]);
   await go("use");
   assert.ok(e.lesson().audio[0].approved);
+});
+
+test("every chapter with a Content Studio recording has a Content Studio TIK, one concept step per topic, with no suggestions left", () => {
+  for (const ch of Curriculum.chapters.filter((c) => c.audio)) {
+    const t = ch.syncedTik;
+    assert.ok(t, ch.id);
+    assert.equal(t.provenance, "Synced from Content Studio");
+    assert.deepEqual(t.concepts.map((c) => c.topic), ch.topics.map((x) => x.name), ch.id);
+    assert.ok(t.header.includes(`Chapter number and name: ${ch.number}. ${ch.name}`), ch.id);
+    assert.deepEqual(Offline.suggestions(t, ch).map((s) => s.text), [], ch.id);
+  }
 });

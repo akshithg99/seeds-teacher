@@ -617,7 +617,7 @@ export class Engine {
     for (const ch of Curriculum.chapters) {
       const where = `Class ${ch.classNum} ${ch.subject}, ${ch.name}`;
       if (ch.syncedTik) tiks.push({ key: `cs:${ch.id}`, fromCS: true, title: `${where}: chapter TIK`, tik: ch.syncedTik, status: "Ready to use", lang: ch.syncedTik.lang });
-      if (ch.audio) audio.push({ key: `cs:${ch.id}`, fromCS: true, title: `${where}: chapter recording`, clip: this.syncedClip(ch.topics[0]), status: "Ready to use", lang: "English" });    }
+      if (ch.audio) audio.push({ key: `csa:${ch.id}`, fromCS: true, title: `${where}: chapter recording`, clip: this.syncedClip(ch.topics[0]), status: "Ready to use", lang: "English" });    }
     for (const l of this.st.lessons) {
       if (l.tik && !String(l.tik.provenance).startsWith("Synced")) {
         tiks.push({ key: `l:${l.id}`, fromCS: false, title: `${this.lessonName(l)}: ${l.tik.scope === "chapter" ? "chapter" : "topic"} TIK`, tik: l.tik,

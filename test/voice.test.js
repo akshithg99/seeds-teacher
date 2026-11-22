@@ -95,9 +95,9 @@ test("one request and one yes plan the whole lesson, then the teacher reviews it
   assert.equal(out.said.at(-1), "Ready. Please review your lesson. Shall we go through it now?");
   const l = e.lesson();
   assert.ok(l.tik && l.questionSets.length && l.audio.length, "TIK, questions and audio are all prepared");
-  // "yes" again goes through them one by one, starting with the TIK draft
+  // "yes" again goes through them one by one; the Content Studio TIK is in use as it is, so it starts with the questions
   await v.handle("yes");
-  assert.equal(e.step.id, "tik_review");
+  assert.equal(e.step.id, "qs_review");
   // "no" to the offered chapter keeps the class and asks for the chapter
   await v.handle("Plan Class 7 Science for Thursday"); await v.handle("no");
   assert.equal(e.step.id, "plan_chapter");

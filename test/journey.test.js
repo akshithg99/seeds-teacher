@@ -247,15 +247,15 @@ test("the agent talks in plain words, never a numbered menu", async () => {
 
 test("Home offers to carry on a half-planned lesson", async () => {
   await choose("no");
-  // Exploring Substances has no Content Studio TIK, so its TIK is a draft and the lesson is not ready yet
-  await choose("plan"); await choose("c7"); await choose("Science"); await choose("7-substances"); await choose(e.step.choices[0].id); await choose("yes");
+  // Lines and Angles has no Content Studio TIK, so its TIK is a draft and the lesson is not ready yet
+  await choose("plan"); await choose("c6"); await choose("Maths"); await choose("6m-lines"); await choose(e.step.choices[0].id); await choose("yes");
   await choose(e.step.choices.find((c) => /English/.test(c.label)).id, true);
   assert.equal(id(), "plan_review");
   assert.equal(e.lesson().tikState, "DRAFT");
   await e.goHome();
   assert.equal(id(), "home");
   assert.deepEqual(e.step.choices.map((c) => c.id), ["resume_plan", "plan", "awaiting", "menu"]);
-  assert.match(e.step.announce, /You were planning Class 7 Science, Exploring Substances: Acidic, Basic, and Neutral/);
+  assert.match(e.step.announce, /You were planning Class 6 Maths, Lines and Angles/);
   assert.deepEqual(match("yes", e.step, null), { type: "choose", choiceId: "resume_plan" }); // a teacher can just agree
   await choose("resume_plan");
   assert.equal(id(), "plan_review"); // back to what is left to review
