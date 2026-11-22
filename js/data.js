@@ -12,7 +12,7 @@ export const DemoAccounts = {
   byPhone(phone) { return this.teachers.find((t) => t.phone === phone) || null; },
 };
 
-const t = (id, name, definitions, checkQuestions, syncedAudio = false) => ({ id, name, definitions, checkQuestions, syncedAudio });
+const t = (id, name, definitions, checkQuestions) => ({ id, name, definitions, checkQuestions });
 /** Audio synced from Content Studio: one recording per chapter, served from the app's audio folder. */
 const csAudio = (file, minutes) => ({ src: "audio/" + file, minutes });
 /** One activity in Vision Empower's TIK format. */
@@ -77,7 +77,7 @@ const chapters = [
       t("6-magnets-1", "Magnetic and non-magnetic materials",
         ["A magnet attracts materials such as iron, nickel and cobalt. These are magnetic materials.",
           "Materials that a magnet does not attract, such as wood, plastic and paper, are non-magnetic materials."],
-        ["Name one thing in our classroom that a magnet will pull.", "Will a magnet pull a wooden pencil? Why or why not?"], true),
+        ["Name one thing in our classroom that a magnet will pull.", "Will a magnet pull a wooden pencil? Why or why not?"]),
       t("6-magnets-2", "Poles of a magnet",
         ["Every magnet has two poles, a north pole and a south pole.", "The pull of a magnet is strongest at its poles."],
         ["Where is the pull of a bar magnet the strongest?", "How many poles does a magnet have?"]),
@@ -188,7 +188,7 @@ const chapters = [
     topics: [
       t("9-matter-1", "Particles of matter", ["Matter is made of very small particles with spaces between them.", "The particles of matter are continuously moving and attract each other."], ["Why does the smell of hot food reach us from a distance?"]),
       t("9-matter-2", "States of matter", ["Solids have a fixed shape and volume.", "Liquids have a fixed volume but take the shape of their container.", "Gases have neither a fixed shape nor a fixed volume."], ["Why can a gas be compressed easily but a solid cannot?"]),
-      t("9-matter-3", "Evaporation", ["Evaporation is the change of a liquid into vapour at any temperature below its boiling point.", "Evaporation causes cooling."], ["Why do we feel cool after sweating on a windy day?"], true),
+      t("9-matter-3", "Evaporation", ["Evaporation is the change of a liquid into vapour at any temperature below its boiling point.", "Evaporation causes cooling."], ["Why do we feel cool after sweating on a windy day?"]),
     ],
     syncedTik: {
       provenance: "Synced from Content Studio", scope: "chapter", lang: "English",

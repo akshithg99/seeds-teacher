@@ -199,9 +199,11 @@ test("Course questions can be used as they are, with no approval (FR-111)", asyn
 
 test("audio that cannot play falls back to teacher-led in one step (FR-38)", async () => {
   e.audio = { ...noAudio, play: () => false };
-  await go("plan", "c6", "Science", "6-magnets", "6-magnets-1", "yes", "tik", "use_as_is"); // a topic with Content Studio audio
+  e.setClassLang(7, "English");
+  await go("plan", "c7", "Maths", "7m-decimals", "7m-decimals-2", "yes", "tik"); // a chapter with a Content Studio recording
+  await e.choose("approve", Source.BUTTON, true); // the drafted TIK
   await e.choose("approve", Source.BUTTON, true); // questions
-  await e.choose("use", Source.BUTTON); // audio from Content Studio
+  await e.choose("use", Source.BUTTON); // the recording
   await go("open", "start", "audio");
   assert.equal(id(), "audio_player");
   await go("toggle");

@@ -58,8 +58,8 @@ test("full journey, offline", async () => {
   assert.match(prepared, /There is only English support./); // FR-111: says it falls back to English
   assert.equal(e.step.announce, "Ready. Please review your lesson.");
   assert.equal(e.lesson().tikState, "SYNCED_IN_USE"); // Content Studio's TIK used as it is (BR-11)
-  assert.ok(e.lesson().questionSets.length && e.lesson().audio.length);
-  assert.ok(!e.lesson().questionSets.some((q) => q.approved) && !e.lesson().audio.some((a) => a.approved));
+  assert.ok(e.lesson().questionSets.length && !e.lesson().questionSets.some((q) => q.approved));
+  assert.ok(e.lesson().tikOnly && !e.lesson().audio.length); // Content Studio has no recording for Exploring Magnets
   await choose("topic_tik");
   assert.equal(id(), "plan_need");
   assert.match(e.step.announce, /There is only English support./); // FR-109: says the language before generating
@@ -78,10 +78,8 @@ test("full journey, offline", async () => {
 
   assert.equal(id(), "qs_review"); // reviewing carries on to the next piece
   await choose("approve", true);
-  assert.equal(id(), "audio_review");
-  await choose("use"); // Content Studio audio is used as it is, never generated (8.3)
-  assert.equal(id(), "lesson_saved");
-  assert.equal(e.step.announce, "Lesson saved and ready to teach.");
+  assert.equal(id(), "lesson_saved"); // no audio to review: audio is never made in the app (8.3)
+  assert.equal(e.step.announce, "Lesson saved and ready to teach. Taught from the TIK, no audio.");
 
   // J3 teach; the learning check comes before End class, and the agent can read it to the class (8.4)
   await choose("open");
@@ -270,7 +268,7 @@ test("Workspace lists Content Studio items and the teacher's own, and opens each
   await e.goTo(Flow.WORKSPACE, Source.BUTTON);
   assert.equal(id(), "workspace");
   const syncedTiks = Curriculum.chapters.filter((c) => c.syncedTik).length;
-  const syncedAudio = Curriculum.chapters.filter((c) => c.audio).length + Curriculum.chapters.flatMap((c) => c.topics).filter((t) => t.syncedAudio).length;
+  const syncedAudio = Curriculum.chapters.filter((c) => c.audio).length;
   const syncedQuizzes = Curriculum.chapters.filter((c) => c.syncedQuiz).length;
   assert.equal(e.step.sections[0].lines[0], `${syncedTiks} TIKs, ${syncedAudio} audio, ${syncedQuizzes === 1 ? "1 quiz" : `${syncedQuizzes} quizzes`}`);
   assert.equal(e.step.sections[1].lines[0], "0 TIKs, 0 audio, 0 quizzes");
@@ -367,7 +365,6 @@ test("a class that stops partway through the TIK continues from the next topic; 
   e.setClassLang(6, "English");
   for (const c of ["plan", "c6", "Science", "6-magnets", "6-magnets-1", "yes", "tik", "use_as_is"]) await choose(c);
   await e.choose("approve", Source.BUTTON, true); // questions
-  await choose("use"); // Content Studio audio
   const steps = TikTabs.classSteps(e.lesson().tik);
   assert.deepEqual(steps.map((s) => s.name), ["Objectives and prerequisites", "Key points", "Interest generating activity",
     "Concept generation: Magnetic and non-magnetic materials", "Concept generation: Poles of a magnet", "Concept generation: Attraction and repulsion",

@@ -596,18 +596,15 @@ export class Engine {
     return this.langNote(l0.classNum, t && t.lang).trim();
   }
 
-  /** Content Studio has audio for this topic: its chapter's recording, or a sample read from the Course text. */
-  hasSyncedAudio(tp) { const ch = tp && Curriculum.chapterOfTopic(tp.id); return !!tp && (!!tp.syncedAudio || !!(ch && ch.audio)); }
+  /** Content Studio has audio for this topic: its chapter's recording. */
+  hasSyncedAudio(tp) { const ch = tp && Curriculum.chapterOfTopic(tp.id); return !!(ch && ch.audio); }
 
-  /** Content Studio's audio for a topic: the chapter's recording if there is one, otherwise a sample read from the Course text, in English. */
+  /** Content Studio's audio for a topic: its chapter's recording. */
   syncedClip(tp) {
     const ch = Curriculum.chapterOfTopic(tp.id);
     // shortcut: the recording's language is not in its file name, so it is taken as English; set it per chapter when known
-    if (ch && ch.audio) return { id: `cs-${ch.id}`, name: `Chapter ${ch.number} recording: ${ch.name}`, provenance: "Synced from Content Studio", src: ch.audio.src,
+    return { id: `cs-${ch.id}`, name: `Chapter ${ch.number} recording: ${ch.name}`, provenance: "Synced from Content Studio", src: ch.audio.src,
       lang: "English", approved: false, reviewed: false, durationSec: ch.audio.minutes * 60 };
-    const script = `Synced audio for ${tp.name}. ` + tp.definitions.join(" ") + " Think of where you have noticed this at home. Then let us talk about it together.";
-    return { id: `cs-${tp.id}`, name: "Audio from Content Studio", provenance: "Synced from Content Studio", script, lang: "English",
-      approved: false, reviewed: false, durationSec: Math.round(script.split(/\s+/).length / 2.3) };
   }
 
   /**
@@ -620,9 +617,7 @@ export class Engine {
     for (const ch of Curriculum.chapters) {
       const where = `Class ${ch.classNum} ${ch.subject}, ${ch.name}`;
       if (ch.syncedTik) tiks.push({ key: `cs:${ch.id}`, fromCS: true, title: `${where}: chapter TIK`, tik: ch.syncedTik, status: "Ready to use", lang: ch.syncedTik.lang });
-      if (ch.audio) audio.push({ key: `cs:${ch.id}`, fromCS: true, title: `${where}: chapter recording`, clip: this.syncedClip(ch.topics[0]), status: "Ready to use", lang: "English" });
-      for (const tp of ch.topics) if (tp.syncedAudio) audio.push({ key: `cs:${tp.id}`, fromCS: true, title: `${where}: ${tp.name}`, clip: this.syncedClip(tp), status: "Ready to use", lang: "English" });
-    }
+      if (ch.audio) audio.push({ key: `cs:${ch.id}`, fromCS: true, title: `${where}: chapter recording`, clip: this.syncedClip(ch.topics[0]), status: "Ready to use", lang: "English" });    }
     for (const l of this.st.lessons) {
       if (l.tik && !String(l.tik.provenance).startsWith("Synced")) {
         tiks.push({ key: `l:${l.id}`, fromCS: false, title: `${this.lessonName(l)}: ${l.tik.scope === "chapter" ? "chapter" : "topic"} TIK`, tik: l.tik,
