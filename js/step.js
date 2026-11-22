@@ -11,7 +11,8 @@ export const Flow = {
   PLAN: { key: "PLAN", label: "Content/TIK generation", words: ["plan", "plan a lesson", "prepare", "tik", "lesson plan", "content", "tik generation"] },
   TEACH: { key: "TEACH", label: "Teaching", words: ["teach", "start class", "teaching", "class"] },
   QUIZ: { key: "QUIZ", label: "Assessment/Quiz", words: ["quiz", "assessment", "test"] },
-  FOLLOWUP: { key: "FOLLOWUP", label: "Post class feedback and remediation", words: ["follow up", "follow-up", "followups", "remediation", "class record", "records", "feedback"] },
+  HISTORY: { key: "HISTORY", label: "History", words: ["history", "my history", "records", "what have i taught", "what i taught"] },
+  FOLLOWUP: { key: "FOLLOWUP", label: "Post class feedback and remediation", words: ["follow up", "follow-up", "followups", "remediation", "class record", "feedback"] },
   WORKSPACE: { key: "WORKSPACE", label: "Workspace", words: ["workspace", "my workspace", "my content", "all my content", "my tiks", "my audio", "my quizzes", "library"] },
   SETUP: { key: "SETUP", label: "Getting set up", words: [] },
 };

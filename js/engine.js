@@ -374,6 +374,7 @@ export class Engine {
         break;
       }
       case "QUIZ": this.go("quiz_home"); break;
+      case "HISTORY": this.go("history"); break;
       case "FOLLOWUP": this.go("followups"); break;
       case "WORKSPACE": this.go("workspace"); break;
       default: this.goHome();
@@ -616,6 +617,23 @@ export class Engine {
     for (const q of this.st.quizzes) quizzes.push({ key: `q:${q.id}`, fromCS: q.provenance.startsWith("Synced"), title: `${this.quizName(q)}: quiz`, quiz: q, status: QUIZ_STATUS[q.state] || q.state, lang: q.lang });
     return { tiks, audio, quizzes };
   }
+  /**
+   * History: every approved TIK, with how much of it has been taught, and every approved quiz, with whether
+   * the class has taken it. A TIK is counted once per lesson; a follow-up is its own lesson.
+   */
+  history() {
+    const tiks = this.st.lessons.filter((l) => this.ready(l)).map((l) => {
+      const ended = this.st.sessions.filter((s) => s.lessonId === l.id && s.endedAt != null);
+      const status = this.taught(l) ? "Taught completely"
+        : ended.length ? `Taught partly: the next class starts at ${this.resumeName(l)}` : "Not taught yet";
+      return { title: this.lessonName(l), status, done: this.taught(l), started: ended.length > 0 };
+    });
+    const quizzes = this.st.quizzes.filter((q) => q.state !== "Draft").map((q) => ({
+      title: this.quizName(q),
+      status: q.state === "Closed" ? `Taken: ${this.quizStats(q).responses} answers` : q.state === "Live" ? `Being taken: open on IVR until ${q.openUntil}` : "Not taken yet",
+      taken: q.state === "Closed" }));
+    return { tiks, quizzes };
+  }
   workspaceItem(key) { const w = this.workspace(); return [...w.tiks, ...w.audio, ...w.quizzes].find((x) => x.key === key) || null; }
 
   /** After a class: a follow-up for each topic few or none of the class could answer, and for a noted difficulty. */
@@ -763,6 +781,8 @@ export class Engine {
           case "workspace": this.go("workspace"); break;
         }
         break;
+
+      case "history": if (c === "followups") this.go("followups"); break;
 
       case "workspace":
         if (["tiks", "audio", "quizzes"].includes(c)) { d.wsKind = c; this.go("ws_list"); }

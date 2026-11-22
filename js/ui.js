@@ -26,7 +26,7 @@ const ICON = {
   stop: '<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/>',
   home: '<path d="M4 11l8-6.5 8 6.5V20h-5.5v-5.5h-5V20H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   plan: '<path d="M12 6.5C10 5 7 4.5 4 5v13.5c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
-  records: '<path d="M15.5 4.5l4 4L9 19H5v-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  history: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   workspace: '<path d="M4 7.5L12 4l8 3.5-8 3.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12l8 3.5 8-3.5M4 16.5L12 20l8-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   speaker: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   dots: '<circle cx="6" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/>',
@@ -120,7 +120,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
       signedIn ? [
         tab("Today", ICON.home, () => goFlow(Flow.HOME), flow === Flow.HOME),
         tab("Plan", ICON.plan, () => goFlow(Flow.PLAN), flow === Flow.PLAN),
-        tab("Records", ICON.records, () => goFlow(Flow.FOLLOWUP), flow === Flow.FOLLOWUP),
+        tab("History", ICON.history, () => goFlow(Flow.HISTORY), flow === Flow.HISTORY),
         tab("Workspace", ICON.workspace, () => goFlow(Flow.WORKSPACE), flow === Flow.WORKSPACE),
       ] : null));
     fit();
@@ -139,7 +139,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     ));
     if (!ui.navOpen) { navEl.replaceChildren(); return; }
     // FR-108 / §12: flat list in the order of the teaching day, the same at every screen size
-    const items = [Flow.HOME, Flow.PLAN, Flow.TEACH, Flow.QUIZ, Flow.FOLLOWUP, Flow.WORKSPACE];
+    const items = [Flow.HOME, Flow.PLAN, Flow.TEACH, Flow.QUIZ, Flow.HISTORY, Flow.FOLLOWUP, Flow.WORKSPACE];
     navEl.replaceChildren(h("div", { class: "shell" }, h("ul", { class: "navlist" },
       items.map((f) => h("li", {}, h("button", { type: "button", "aria-current": s.flow === f ? "page" : null, onclick: () => goFlow(f) }, f.label))),
       h("li", {}, h("button", { type: "button", onclick: onHelp }, "Help")),

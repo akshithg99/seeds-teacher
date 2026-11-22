@@ -420,3 +420,32 @@ test("a class that stops partway through the TIK continues from the next topic; 
   assert.equal(id(), "plan_confirm");
   assert.equal(e.draft.chapterId, "6-measure");
 });
+
+test("History lists approved TIKs with how much is taught, and approved quizzes with whether they were taken", async () => {
+  await choose("no");
+  assert.deepEqual(match("history", e.step, null), { type: "goto", flow: Flow.HISTORY });
+  e.setClassLang(6, "English");
+  for (const c of ["plan", "c6", "Science", "6-magnets", "yes", "tik", "use_as_is"]) await choose(c);
+  await e.choose("approve", Source.BUTTON, true); // questions
+  const lines = (h) => e.step.sections.find((s) => s.heading === h).lines;
+  await e.goTo(Flow.HISTORY, Source.BUTTON);
+  assert.equal(id(), "history");
+  assert.deepEqual(lines("TIKs"), ["Class 6 Science, Exploring Magnets · Not taught yet"]);
+  // taught partly, then completely
+  await e.goTo(Flow.TEACH, Source.BUTTON); await choose(e.step.choices[0].id); await choose("start");
+  for (let k = 0; k < 3; k++) await choose("next");
+  await choose("end", true); await choose("done"); await choose("time");
+  while (id() === "lc_ask") await choose("some");
+  await e.goTo(Flow.HISTORY, Source.BUTTON);
+  assert.deepEqual(lines("TIKs"), ["Class 6 Science, Exploring Magnets · Taught partly: the next class starts at Concept generation: Poles of a magnet"]);
+  // quizzes: only approved ones are listed, and taken once closed
+  await e.goTo(Flow.QUIZ, Source.BUTTON);
+  for (const c of ["plan", "c6", "Science", "6-magnets", "use_cs"]) await choose(c);
+  assert.deepEqual(e.history().quizzes, []); // a draft is not listed
+  await choose("approve", true); await choose("friday"); await choose("share", true);
+  await e.goTo(Flow.HISTORY, Source.BUTTON);
+  assert.deepEqual(lines("Quizzes"), ["Class 6 Science, Exploring Magnets · Being taken: open on IVR until Friday evening"]);
+  assert.match(e.step.announce, /1 approved quiz: 0 taken, 1 not taken yet./);
+  await choose("followups");
+  assert.equal(id(), "followups");
+});

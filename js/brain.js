@@ -51,11 +51,11 @@ const TOOLS = [
   tool("submit_text", "Give free speech to a step that allows it (need statement, change request, note, reason).", { text: { type: "string" } }, ["text"]),
   tool("command", "A fixed voice command. Use help when the teacher asks what they can do or say here.", { name: { type: "string", enum: ["repeat", "back", "where_am_i", "what_did_you_do", "help", "home", "why", "voice_off", "undo", "next_tab", "prev_tab"] } }, ["name"]),
   tool("open_tab", "On a step with tik_tabs, open one TIK tab and read it.", { tab: { type: "string", enum: TikTabs.titles } }, ["tab"]),
-  tool("go_to", "Go to a feature flow, keeping any unfinished draft.", { flow: { type: "string", enum: ["home", "plan", "teach", "quiz", "followups", "workspace"] } }, ["flow"]),
+  tool("go_to", "Go to a feature flow, keeping any unfinished draft.", { flow: { type: "string", enum: ["home", "plan", "teach", "quiz", "history", "followups", "workspace"] } }, ["flow"]),
   tool("not_understood", "Use when you cannot tell what the teacher meant."),
 ];
 
-const FLOW_BY_NAME = { plan: Flow.PLAN, teach: Flow.TEACH, quiz: Flow.QUIZ, followups: Flow.FOLLOWUP, workspace: Flow.WORKSPACE, home: Flow.HOME };
+const FLOW_BY_NAME = { plan: Flow.PLAN, teach: Flow.TEACH, quiz: Flow.QUIZ, history: Flow.HISTORY, followups: Flow.FOLLOWUP, workspace: Flow.WORKSPACE, home: Flow.HOME };
 const num = (v) => (typeof v === "number" ? v : v != null && !isNaN(parseInt(v, 10)) ? parseInt(v, 10) : null);
 
 export class AgentBrain {

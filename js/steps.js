@@ -582,6 +582,23 @@ export function buildStep(e) {
           sections: q ? quizAnalytics(e, q) : [] });
     }
 
+    // ======================================================== History
+    case "history": {
+      const h = e.history();
+      const count = (xs, test) => xs.filter(test).length;
+      const talk = [
+        h.tiks.length ? `${plural(h.tiks.length, "approved TIK", "approved TIKs")}: ${count(h.tiks, (x) => x.done)} taught completely, ${count(h.tiks, (x) => x.started && !x.done)} taught partly, ${count(h.tiks, (x) => !x.started)} not taught yet.` : "No approved TIKs yet.",
+        h.quizzes.length ? `${plural(h.quizzes.length, "approved quiz", "approved quizzes")}: ${count(h.quizzes, (x) => x.taken)} taken, ${count(h.quizzes, (x) => !x.taken)} not taken yet.` : "No approved quizzes yet.",
+      ];
+      return makeStep("history", Flow.HISTORY, "History", "Open follow-ups and class records, or go back to Home?", [
+        choice("followups", "Follow-ups and class records", { words: ["follow ups", "follow-ups", "class records", "records"] }), homeBtn(),
+      ], { announce: talk.join(" "),
+        sections: [
+          section("TIKs", h.tiks.length ? h.tiks.map((x) => `${x.title} · ${x.status}`) : ["None approved yet. A TIK shows here once it is approved, or used as it is from Content Studio."]),
+          section("Quizzes", h.quizzes.length ? h.quizzes.map((x) => `${x.title} · ${x.status}`) : ["None approved yet."]),
+        ] });
+    }
+
     // ======================================================== F10 Remediation
     case "followups": {
       const open = st.patterns.filter((p) => p.state === "Proposed" || p.state === "Confirmed");
