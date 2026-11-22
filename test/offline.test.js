@@ -41,7 +41,7 @@ test("topic TIK is in Vision Empower's format and reflects the teacher's words",
   }
   assert.ok(t.reasoning.includes("30-minute"), t.reasoning);
   assert.ok(TikTabs.materials(t).some((m) => m.toLowerCase() === "ring magnets"));
-  assert.ok(TikTabs.extension(t));
+  assert.ok(t.exercises.length);
   assert.ok(t.guidelines.some((g) => g.startsWith("Provide homework")));
 });
 

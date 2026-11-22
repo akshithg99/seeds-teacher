@@ -92,8 +92,8 @@ test("full journey, offline", async () => {
   assert.ok(read.includes(e.lesson().questionSets[0].check[0]), read);
   await choose("end", true);
   assert.equal(id(), "end_coverage");
-  await choose("some");
-  await choose("overview");
+  assert.equal(e.step.question, "Did you finish this step: Key points?");
+  await choose("done");
   await choose("time");
   assert.equal(id(), "lc_ask"); // the result is given only for what was covered (AC-56.1)
   assert.deepEqual(e.step.choices.map((c) => c.id), ["few", "some", "many", "none"]);
@@ -346,4 +346,49 @@ test("Plan a quiz: Content Studio's or a new one, for the chapter or some topics
   assert.ok(mine.questions.every((x) => x.topicId === "6-magnets-2" && x.options.length >= 2));
   assert.ok(e.step.banner); // a draft waits for approval
   assert.equal(e.quizName(mine), "Class 6 Science, Exploring Magnets: Poles of a magnet");
+});
+
+test("a class that stops partway through the TIK continues from the next topic; a finished TIK offers the next chapter", async () => {
+  await choose("no");
+  e.setClassLang(6, "English");
+  for (const c of ["plan", "c6", "6-magnets", "6-magnets-1", "yes", "tik", "use_as_is"]) await choose(c);
+  await e.choose("approve", Source.BUTTON, true); // questions
+  await choose("use"); // Content Studio audio
+  const steps = TikTabs.classSteps(e.lesson().tik);
+  assert.deepEqual(steps.map((s) => s.name), ["Objectives and prerequisites", "Key points", "Interest generating activity",
+    "Concept generation: Magnetic and non-magnetic materials", "Concept generation: Poles of a magnet", "Concept generation: Attraction and repulsion",
+    "Exercise and reinforcement activity"]);
+  await choose("open"); await choose("start");
+  assert.equal(e.step.title, "Step 1 of 7: Objectives and prerequisites");
+  for (let k = 0; k < 4; k++) await choose("next");
+  assert.equal(e.step.title, "Step 5 of 7: Concept generation: Poles of a magnet");
+  await choose("end", true);
+  assert.equal(e.step.question, "Did you finish this step: Concept generation: Poles of a magnet?");
+  await choose("partway");
+  await choose("time");
+  while (id() === "lc_ask") await choose("some");
+  assert.equal(id(), "record_draft");
+  assert.ok(e.coveredTopics().has("6-magnets-1") && !e.coveredTopics().has("6-magnets-2"));
+  assert.ok(e.st.records.at(-1).prefilled.includes("Next class starts at: Concept generation: Poles of a magnet."));
+
+  // the next class starts where this one stopped
+  await e.goTo(Flow.HOME, Source.BUTTON);
+  assert.deepEqual(e.step.sections.find((s) => s.heading === "Ready to teach").lines, [e.lessonName(e.lesson()) + " (continue from Concept generation: Poles of a magnet)"]);
+  await choose("teach_pick"); await choose(e.step.choices[0].id);
+  assert.match(e.step.announce, /It continues from Concept generation: Poles of a magnet, where the last class stopped./);
+  await choose("start");
+  assert.equal(e.step.title, "Step 5 of 7: Concept generation: Poles of a magnet");
+  await choose("next"); await choose("next");
+  await choose("end", true);
+  await choose("done");
+  while (id() === "lc_ask") await choose("some");
+  assert.ok(e.taught(e.lesson()));
+  assert.deepEqual(e.st.sessions.at(-1).covered, ["6-magnets-2", "6-magnets-3"]); // this class's topics only, so the learning check does not repeat the first
+
+  // the whole chapter is covered, so Home offers the next chapter to plan
+  await e.goTo(Flow.HOME, Source.BUTTON);
+  assert.deepEqual(e.step.sections.find((s) => s.heading === "Up next").lines, ["Class 6 science, chapter 2, Measurement of Length and Motion: " + Curriculum.chapter("6-measure").topics[0].name]);
+  await choose("plan_next");
+  assert.equal(id(), "plan_confirm");
+  assert.equal(e.draft.chapterId, "6-measure");
 });

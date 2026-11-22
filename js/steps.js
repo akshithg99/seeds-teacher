@@ -3,7 +3,6 @@ import { Tier, Flow, makeStep, choice, section, inLang } from "./step.js";
 import * as Offline from "./offline.js";
 import { TikTabs } from "./tiktabs.js";
 
-export const PLANNED_MINUTES = 40;
 const NOT_APPROVED = "Created by SEEDS PROJECT-B — not yet approved";
 const PLAN_STAGES = ["Lesson", "TIK", "Questions", "Audio", "Ready"];
 const planProgress = (stage) => ({ labels: PLAN_STAGES, current: stage });
@@ -145,7 +144,7 @@ export function buildStep(e) {
     case "teach_pick": {
       const ready = st.lessons.filter((x) => e.ready(x) && !e.taught(x)).reverse();
       if (!ready.length) return makeStep("teach_pick", Flow.TEACH, "Teach a lesson", "No lesson is ready to teach yet. Plan one now?", [choice("plan", "Plan a lesson"), homeBtn()]);
-      return makeStep("teach_pick", Flow.TEACH, "Teach a lesson", "Which lesson?", paged(ready.map((x) => choice(`l:${x.id}`, e.lessonName(x))), r.page), { secondary: [homeBtn()] });
+      return makeStep("teach_pick", Flow.TEACH, "Teach a lesson", "Which lesson?", paged(ready.map((x) => choice(`l:${x.id}`, e.readyName(x))), r.page), { secondary: [homeBtn()] });
     }
 
     case "next_class":
@@ -360,32 +359,34 @@ export function buildStep(e) {
         choice("start", "Start class", { words: ["start", "start class", "yes"], enabled: ok, whyDisabled: "This lesson has no ready TIK yet, so it cannot be taught. Say 'prepare it'." }),
         ...(!ok ? [choice("prepare", "Prepare it", { words: ["prepare"] })] : []),
         homeBtn(),
-      ], { announce: `${e.lessonName(l)}. ` + (ok ? (e.approvedAudio(l).length ? "Ready to teach." : "Ready to teach, no audio yet.") : "Not ready."),
+      ], { announce: `${e.lessonName(l)}. ` + (ok ? (e.approvedAudio(l).length ? "Ready to teach." : "Ready to teach, no audio yet.") + (e.resumeAt(l) ? ` It continues from ${e.resumeName(l)}, where the last class stopped.` : "") : "Not ready."),
         known: lessonKnown, contentLang: l && l.tik && l.tik.lang,
         sections: [...(tp ? [section("What students learn (Course)", tp.definitions)] : []), ...(l && l.tik ? [section("Objectives", l.tik.objectives, { lang: l.tik.lang }), section("Materials required", TikTabs.materials(l.tik), { lang: l.tik.lang })] : [])] });
     }
 
     case "teach_step": {
       const s = e.session() || e.activeSession();
-      const steps = l && l.tik ? TikTabs.activities(l.tik) : [];
+      const steps = l && l.tik ? TikTabs.classSteps(l.tik) : [];
       const i = Math.min(Math.max(0, (s && s.stepIndex) || 0), Math.max(0, steps.length - 1));
-      const a = steps[i];
+      const cur = steps[i];
       const hasAudio = e.approvedAudio(l).length > 0;
       const tl = l && l.tik && l.tik.lang;
       // questions are offered only if they were prepared before class (8.4)
       const hasQs = !!l && l.questionSets.some((q) => q.approved && q.check.length);
       const what = ["play audio", ...(hasQs ? ["learning check"] : [])].join(", ");
-      return makeStep("teach_step", Flow.TEACH, `Activity ${i + 1} of ${steps.length}`,
-        i < steps.length - 1 ? `Next activity, ${what}, or end class?` : `This is the last activity. ${cap(what)}, or end class?`, [
-          ...(i < steps.length - 1 ? [choice("next", "Next activity", { words: ["next", "next activity", "next step"] })] : []),
+      return makeStep("teach_step", Flow.TEACH, `Step ${i + 1} of ${steps.length}: ${cur ? cur.name : ""}`,
+        i < steps.length - 1 ? `Next step, ${what}, or end class?` : `This is the last step. ${cap(what)}, or end class?`, [
+          ...(i < steps.length - 1 ? [choice("next", "Next step", { words: ["next", "next step", "next activity"] })] : []),
           choice("audio", "Play audio", { words: ["play audio", "audio", "play"], enabled: hasAudio, whyDisabled: "No audio for this lesson. Teacher-led works as usual." }),
           ...(hasQs ? [choice("lc", "Learning check", { words: ["learning check", "questions", "the questions"] })] : []),
           choice("end", "End class", { tier: Tier.COMMIT, words: ["end class", "end"], commitWord: "end class", readBack: "I'll end the class and ask what was covered." }),
-        ], { announce: a ? inLang(tl, TikTabs.actText(a)) : null, inClass: true, contentLang: tl,
+        ], { announce: cur ? `${cur.name}. ` + inLang(tl, [...cur.lines, ...cur.acts.map(TikTabs.actText)].join(" ")) : null, inClass: true, contentLang: tl,
           known: [["Lesson", e.lessonName(l)], ["Method", "Your choice: activity, teacher-led, audio, discussion or tactile materials"]],
-          sections: [...(i === 0 && tp ? [section("What students learn (Course)", tp.definitions)] : []), ...(a ? [section(a.name, [`Materials required: ${a.materials.join(", ") || "None"}`, ...a.flow.map((x, k) => `${k + 1}. ${x}`)], { lang: tl })] : [])],
-          secondary: i > 0 ? [choice("prev", "Previous activity", { words: ["previous", "previous activity", "previous step"] })] : [],
-          progress: { labels: steps.map((_, k) => `Activity ${k + 1}`), current: i } });
+          sections: [...(i === 0 && tp ? [section("What students learn (Course)", tp.definitions)] : []),
+            ...(cur && cur.lines.length ? [section(cur.name, cur.lines, { lang: tl })] : []),
+            ...(cur ? cur.acts.map((a) => section(a.name, [`Materials required: ${a.materials.join(", ") || "None"}`, ...a.flow.map((x, k) => `${k + 1}. ${x}`)], { lang: tl })) : [])],
+          secondary: i > 0 ? [choice("prev", "Previous step", { words: ["previous", "previous step", "previous activity"] })] : [],
+          progress: { labels: steps.map((x) => x.short), current: i } });
     }
 
     case "audio_player": {
@@ -414,17 +415,14 @@ export function buildStep(e) {
           sections: sets.map((q) => section(`Discussion: ${q.title}`, q.discussion, { lang: q.lang })) });
     }
 
-    case "end_coverage":
-      return makeStep("end_coverage", Flow.TEACH, "End class", "All covered, or some covered?",
-        [choice("all", "All covered", { words: ["all", "all covered", "everything"] }), choice("some", "Some covered", { words: ["some", "some covered", "partly"] })],
-        { inClass: true, known: [["Lesson", e.lessonName(l)]] });
-
-    case "end_partial":
-      return makeStep("end_partial", Flow.TEACH, "What was covered", "What did you cover?", [
-        choice("overview", "The overview only", { words: ["overview", "overview only"] }),
-        choice("part", "Overview and part of the topic", { words: ["part", "part of the topic"] }),
-        choice("none", "Nothing from the plan", { words: ["nothing", "none"] }),
-      ], { inClass: true });
+    case "end_coverage": {
+      // where the class stopped in the TIK, so the next class starts from there
+      const steps = TikTabs.classSteps(l.tik), s = e.session();
+      const i = Math.min((s && s.stepIndex) || 0, steps.length - 1);
+      return makeStep("end_coverage", Flow.TEACH, "End class", `Did you finish this step: ${steps[i].name}?`,
+        [choice("done", "Yes, finished it", { words: ["yes", "finished", "done", "all covered"] }), choice("partway", "No, stopped partway", { words: ["no", "partway", "stopped", "some covered"] })],
+        { inClass: true, known: [["Lesson", e.lessonName(l)], ["Step", `${i + 1} of ${steps.length}`]] });
+    }
 
     case "end_reason":
       return makeStep("end_reason", Flow.TEACH, "Reason", "Why was the rest not covered?", [
@@ -437,23 +435,6 @@ export function buildStep(e) {
     case "end_reason_other":
       return makeStep("end_reason_other", Flow.TEACH, "Reason", "Say or type the reason.", [choice("back", "Back")],
         { inClass: true, freeSpeech: { prompt: "For example: teacher absent for half the period", longWindow: true } });
-
-    case "early_finish": {
-      const s = e.session();
-      const left = s ? PLANNED_MINUTES - Math.floor((e.now() - s.startedAt) / 60000) : 10;
-      const ex = l && l.tik && TikTabs.extension(l.tik);
-      return makeStep("early_finish", Flow.TEACH, "Time left", "Start the exercises and reinforcement activity, or skip?",
-        [choice("start_ext", "Start the activity", { words: ["start", "exercise", "exercises", "extension"] }), choice("skip", "Skip", { words: ["skip"] })],
-        { announce: `You've covered today's plan with about ${left} minutes left.`, inClass: true,
-          sections: ex ? [section(`Exercises and reinforcement: ${ex.name}`, [...ex.flow, "Estimated time: about 10 minutes."], { lang: l.tik.lang })] : [] });
-    }
-
-    case "extension": {
-      const ex = l && l.tik && TikTabs.extension(l.tik);
-      return makeStep("extension", Flow.TEACH, "Exercises and reinforcement", "Say done when the activity is over.", [choice("done", "Done", { words: ["done", "finished"] })],
-        { inClass: true, announce: ex ? inLang(l.tik.lang, TikTabs.actText(ex)) : null,
-          sections: ex ? [section(ex.name, [`Materials required: ${ex.materials.join(", ") || "None"}`, ...ex.flow.map((x, k) => `${k + 1}. ${x}`)], { lang: l.tik.lang })] : [] });
-    }
 
     case "lc_read": {
       const sets = l ? l.questionSets.filter((q) => q.approved && q.check.length) : [];
@@ -667,7 +648,7 @@ function homeStep(e) {
   {
     const ready = st.lessons.filter((x) => e.ready(x) && !e.taught(x));
     if (ready.length) {
-      sections.push(section("Ready to teach", ready.map((x) => e.lessonName(x)), { emphasis: !active }));
+      sections.push(section("Ready to teach", ready.map((x) => e.readyName(x)), { emphasis: !active }));
       choices.push(choice("teach_pick", "Teach a ready lesson", { words: ["teach"] }));
     }
     const todo = e.unfinishedLesson();
@@ -677,7 +658,10 @@ function homeStep(e) {
     }
     if (!st.lessons.length && !st.sessions.length) sections.push(section("No lessons yet", ["Ask what to teach next, or plan a lesson."]));
     // Home always offers a way forward, whatever state the lessons are in
-    if (!todo && !ready.length) choices.push(choice("next_topic", "What should I teach next?", { words: ["what should i teach", "teach next", "lesson plan", "what is my lesson plan"] }));
+    // after a TIK is taught, Home offers what comes next: the chapter's next topic, or the next chapter
+    const up = !active && !todo && !ready.length ? e.upNext() : null;
+    if (up) { sections.push(section("Up next", [`Class ${up.chapter.classNum} science, ${e.upNextText(up)}`], { emphasis: true })); choices.push(choice("plan_next", "Plan the next lesson", { words: ["plan the next lesson", "plan next", "next lesson", "yes", "okay", "sure"] })); }
+    if (!todo && !ready.length && !up) choices.push(choice("next_topic", "What should I teach next?", { words: ["what should i teach", "teach next", "lesson plan", "what is my lesson plan"] }));
     choices.push(choice("plan", "Plan a lesson", { words: ["plan"] }));
   }
   const waiting = [];
@@ -701,6 +685,8 @@ function homeStep(e) {
     else if (!st.lessons.length) talk.push("You don't have any lessons yet. I can tell you what to teach next, or help you plan a lesson.");
     const todo = e.unfinishedLesson();
     if (todo && !ready) { talk.push(`You were planning ${e.lessonName(todo)}.`); question = "Shall we carry on with it?"; }
+    const up = !todo && !ready ? e.upNext() : null;
+    if (up) { talk.push(`Next for class ${up.chapter.classNum} is ${e.upNextText(up)}.`); question = "Shall we plan it?"; }
   }
   if (waiting.length) talk.push(`You ${talk.some((x) => !x.startsWith("Hello")) ? "also " : ""}have ${orList(waiting.map((w) => w.replace(/ waiting for approval$/, " to approve"))).replace(/ or ([^,]*)$/, " and $1")}.`);
   return makeStep("home", Flow.HOME, "Home", question, primary, { announce: talk.join(" ") || null, sections,

@@ -2,7 +2,7 @@ import { Curriculum, DemoAccounts, LANGS } from "./data.js";
 import { Tier, Source, Flow, makeStep, choice, allChoices, spoken, optionsPhrase, inLang } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
 import * as Offline from "./offline.js";
-import { buildStep, PLANNED_MINUTES } from "./steps.js";
+import { buildStep } from "./steps.js";
 
 export const emptyState = () => ({
   signedInPhone: null, rememberMe: true, voiceGuide: {}, speechRate: 1, bargeIn: false,
@@ -82,7 +82,13 @@ export class Engine {
   topicOf(l) { return l ? Curriculum.topic(l.topicId) : null; }
   session(id = this.draft.sessionId) { return this.st.sessions.find((s) => s.id === id) || null; }
   activeSession() { return [...this.st.sessions].reverse().find((s) => s.endedAt == null) || null; }
-  taught(l) { return this.st.sessions.some((s) => s.lessonId === l.id && s.endedAt != null); }
+  /** Taught once a class has gone through the whole TIK; a class that stopped partway leaves it ready to continue. */
+  taught(l) { return this.st.sessions.some((s) => s.lessonId === l.id && s.endedAt != null && s.coverage === "all"); }
+  /** The TIK step the next class of this lesson starts at: where the last class stopped. */
+  resumeAt(l) { const s = [...this.st.sessions].reverse().find((x) => x.lessonId === l.id && x.endedAt != null); return (s && s.coverage !== "all" && s.nextStep) || 0; }
+  resumeName(l) { return l.tik ? TikTabs.classSteps(l.tik)[this.resumeAt(l)].name : ""; }
+  /** A ready lesson's name, with where it continues from if a class stopped partway. */
+  readyName(l) { return this.lessonName(l) + (this.resumeAt(l) ? ` (continue from ${this.resumeName(l)})` : ""); }
   ready(l) { return !!l && (l.tikState === "SYNCED_IN_USE" || l.tikState === "APPROVED"); }
   approvedAudio(l) { return l ? l.audio.filter((a) => a.approved) : []; }
   lessonName(l) {
@@ -440,10 +446,21 @@ export class Engine {
 
   // ------------------------------------------------------------------ journey logic
 
+  /** Topics whose concept step some class has finished, from any TIK. */
+  coveredTopics() { return new Set(this.st.sessions.filter((s) => s.endedAt != null).flatMap((s) => s.covered)); }
+
   nextTopic(ch) {
-    const done = new Set(this.st.sessions.filter((s) => s.endedAt != null && s.coverage === "all").map((s) => { const l = this.lesson(s.lessonId); return l && l.topicId; }));
+    const done = this.coveredTopics();
     return ch.topics.find((t) => !done.has(t.id)) || ch.topics[0] || null;
   }
+
+  /** What to plan next, from the class taught last: the chapter's next topic, or the next chapter once every topic is covered. */
+  upNext() {
+    const s = [...this.st.sessions].reverse().find((x) => x.endedAt != null && this.lesson(x.lessonId));
+    const ch = s && this.nextChapter(this.lesson(s.lessonId).classNum);
+    return ch ? { chapter: ch, topic: this.nextTopic(ch) } : null;
+  }
+  upNextText(u) { return `chapter ${u.chapter.number}, ${u.chapter.name}: ${u.topic.name}`; }
 
   /** FR-106: next chapter is the one after the last taught; otherwise the first in contents order. */
   nextChapter(classNum, after = null) {
@@ -457,7 +474,7 @@ export class Engine {
     const ch = Curriculum.chapter(ref);
     if (!ch) return list[0] || null;
     // Uncovered topics carry forward (J4): stay on the chapter until all topics are covered
-    const allCovered = ch.topics.every((t) => this.st.sessions.some((s) => { const l = this.lesson(s.lessonId); return s.endedAt != null && s.coverage === "all" && l && l.topicId === t.id; }));
+    const done = this.coveredTopics(), allCovered = ch.topics.every((t) => done.has(t.id));
     if (!after && !allCovered) return ch;
     const i = list.findIndex((x) => x.id === ref);
     return list[i + 1] || list[list.length - 1] || null;
@@ -498,6 +515,8 @@ export class Engine {
     if (s.flow === Flow.QUIZ) ctx = d.quizId;
     else if (s.flow === Flow.FOLLOWUP) ctx = d.recordId || d.patternId;
     else if (s.id === "class_lang") ctx = `${d.langFor}`;
+    // a lesson can now be taught over several classes, so End class is once per class, not per lesson
+    else if (s.flow === Flow.TEACH) ctx = d.sessionId;
     else { const l = this.lesson(); ctx = `${d.lessonId}:${l ? hash([l.tik, l.questionSets, l.audio]) : 0}`; }
     return `${s.id}:${c.id}:${ctx}`;
   }
@@ -673,14 +692,17 @@ export class Engine {
     const facts = [`Lesson: ${this.lessonName(l)}.`, `TIK: ${(l && l.tik && l.tik.provenance) || "none"}.`,
       `Audio used: ${ended.methods.includes("audio") ? "yes" : "no"}.`,
       `Method: ${[...new Set(ended.methods.length ? ended.methods : ["teacher-led"])].join(", ")}.`,
-      ended.coverage === "all" ? "Coverage: all planned topics covered." : `Coverage: some covered (${this.coveredText(ended)}). Reason: ${ended.reason || "not given"}.`];
-    if (ended.extensionUsed) facts.push("Extension activity used.");
+      ended.coverage === "all" ? "Coverage: the whole TIK." : `Coverage: some covered (${this.coveredText(ended)}). Reason: ${ended.reason || "not given"}.`];
+    // where the next class starts: the step this one stopped at, or what comes after this TIK
+    const u = this.upNext();
+    const next = ended.coverage === "all" ? (u ? `Next to plan: ${this.upNextText(u)}.` : "") : `Next class starts at: ${this.resumeName(l)}.`;
+    if (next) facts.push(next);
     Object.entries(ended.checkResults).forEach(([k, v]) => facts.push(`Learning check, ${k === "overview" ? "overview" : (Curriculum.topic(k) || {}).name || k}: ${v}.`));
     const rec = { id: this.newId(), sessionId: s.id, lessonId: s.lessonId, createdAt: this.now(), prefilled: facts, notes: [], summary: "", previewed: false, saved: false };
     this.store.update((x) => ({ ...x, records: [...x.records, rec] }));
     this.draft.recordId = rec.id;
     this.go("record_draft");
-    return "Class ended. I've drafted your class record from the session.";
+    return "Class ended. I've drafted your class record from the session." + (next ? ` ${next}` : "");
   }
 
   startLearningCheck() {
@@ -725,6 +747,11 @@ export class Engine {
           case "plan": d.clearPlanning(); this.go("plan_class"); break;
           case "resume_plan": { const l = this.unfinishedLesson(); if (l) { d.clearPlanning(); d.lessonId = l.id; this.go(l.tik ? "plan_review" : this.nextPlanningStep(l)); } break; }
           case "next_topic": this.go("next_class"); break;
+          case "plan_next": {
+            const u = this.upNext(); if (!u) break;
+            d.clearPlanning(); d.classNum = u.chapter.classNum; d.chapterId = u.chapter.id; d.topicId = u.topic.id;
+            this.go("plan_confirm"); break;
+          }
           case "teach_pick": this.go("teach_pick"); break;
           case "awaiting": this.go("awaiting"); break;
           case "quiz": this.go("quiz_home"); break;
@@ -939,7 +966,7 @@ export class Engine {
       // ---------------- F6 / F7 Teaching
       case "teach_start":
         if (c === "start") {
-          const s = { id: this.newId(), lessonId: l.id, startedAt: this.now(), stepIndex: 0, endedAt: null, coverage: null, covered: [], reason: null, checkResults: {}, methods: [], extensionUsed: false };
+          const s = { id: this.newId(), lessonId: l.id, startedAt: this.now(), stepIndex: this.resumeAt(l), from: this.resumeAt(l), nextStep: 0, endedAt: null, coverage: null, covered: [], reason: null, checkResults: {}, methods: [] };
           this.store.update((x) => ({ ...x, sessions: [...x.sessions, s] }));
           d.sessionId = s.id;
           this.go("teach_step");
@@ -1002,18 +1029,14 @@ export class Engine {
         break;
       case "end_coverage": {
         const s = this.session();
-        if (c === "all") {
-          this.updateSession(s.id, (x) => ({ ...x, coverage: "all", covered: ["overview", l.topicId] }));
-          const elapsedMin = Math.floor((this.now() - s.startedAt) / 60000);
-          if (l.tik && TikTabs.extension(l.tik) && elapsedMin < PLANNED_MINUTES) { this.go("early_finish"); return ""; }
-          return this.startLearningCheck();
-        }
-        if (c === "some") this.go("end_partial");
-        break;
-      }
-      case "end_partial": {
-        const covered = { overview: ["overview"], part: ["overview", "topic-part"] }[c] || [];
-        this.updateSession(this.session().id, (x) => ({ ...x, coverage: "some", covered }));
+        const steps = TikTabs.classSteps(l.tik);
+        const next = Math.min(s.stepIndex, steps.length - 1) + (c === "done" ? 1 : 0);
+        // covered in this class (from where it started): the overview if it did the key points, and each topic whose concept step it finished
+        const from = s.from || 0, all = next >= steps.length;
+        const ids = steps.map((x) => x.topic && (ch.topics.find((t) => t.name.toLowerCase() === x.topic.toLowerCase()) || {}).id);
+        const covered = [...new Set([...(from < 2 && next >= 2 ? ["overview"] : []), ...ids.slice(from, next).filter(Boolean), ...(all && !ids.some(Boolean) ? [l.topicId] : [])])];
+        this.updateSession(s.id, (x) => ({ ...x, nextStep: next, coverage: all ? "all" : "some", covered }));
+        if (all) return this.startLearningCheck();
         this.go("end_reason");
         break;
       }
@@ -1024,11 +1047,6 @@ export class Engine {
         return this.startLearningCheck();
       }
       case "end_reason_other": if (c === "back") this.go("end_reason"); break;
-      case "early_finish":
-        if (c === "start_ext") { this.updateSession(this.session().id, (x) => ({ ...x, extensionUsed: true })); this.go("extension"); }
-        if (c === "skip") return this.startLearningCheck();
-        break;
-      case "extension": if (c === "done") return this.startLearningCheck(); break;
       case "lc_ask": {
         const key = d.lcQueue[d.lcIndex];
         if (key) this.updateSession(this.session().id, (x) => ({ ...x, checkResults: { ...x.checkResults, [key]: c === "skip" ? "skipped" : c } }));

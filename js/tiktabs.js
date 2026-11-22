@@ -41,8 +41,14 @@ export const TikTabs = {
   activities: (t) => [...(t.interest || []), ...(t.concepts || []).flatMap((c) => c.activities)],
   /** Materials to gather before class, from every activity. */
   materials: (t) => uniq([...TikTabs.activities(t), ...(t.exercises || [])].flatMap((a) => a.materials)).filter((m) => m && !/^none$/i.test(m)),
-  /** Exercises and reinforcement: offered when the class finishes early (v5.4 8.5). */
-  extension: (t) => (t.exercises && t.exercises[0]) || null,
+  /** The class steps, in the TIK's order (the header is not a step): one concept step per topic, so a class can stop at a topic and the next one starts there. */
+  classSteps: (t) => [
+    { name: "Objectives and prerequisites", short: "Objectives", lines: [...t.objectives, `Prerequisite concept: ${t.prerequisites || "None"}`], acts: [] },
+    { name: "Key points", short: "Key points", lines: t.keyPoints.map((k, j) => `${j + 1}. ${k}`), acts: [] },
+    ...(t.interest.length ? [{ name: "Interest generating activity", short: "Interest", lines: [], acts: t.interest }] : []),
+    ...t.concepts.map((c, k) => ({ name: `Concept generation: ${c.topic}`, short: `Topic ${k + 1}`, topic: c.topic, lines: [], acts: c.activities })),
+    ...(t.exercises.length ? [{ name: "Exercise and reinforcement activity", short: "Exercise", lines: [], acts: t.exercises }] : []),
+  ],
   /** One activity as a sentence, for speech. */
   actText: (a) => `${a.name}. ${a.flow.join(" ")}`,
 
