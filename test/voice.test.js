@@ -191,3 +191,19 @@ test("the Speak button turns the agent on; it keeps listening and answering unti
   await v.handle("stop");
   assert.equal(v.on, false);
 });
+
+test("while on, the agent stops listening when lesson audio starts, and picks up again when it ends", async () => {
+  let playing = false;
+  v.player.isPlaying = () => playing;
+  v.onVoiceButton(); out.done();
+  assert.equal(v.state, "LISTENING");
+  playing = true; // the teacher taps Play audio
+  v.afterButton("", false);
+  assert.equal(v.state, "SLEEP");
+  assert.ok(v.on, "still on");
+  playing = false; // the audio ends
+  e.notify(Source.SYSTEM);
+  assert.equal(v.state, "SPEAKING");
+  out.done();
+  assert.equal(v.state, "LISTENING");
+});

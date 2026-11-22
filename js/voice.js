@@ -325,7 +325,8 @@ export class VoiceOrchestrator {
       if (!engine.busy) this.narrated = null;
       if (src && src !== Source.VOICE && this.showOptions) { this.showOptions = false; this.emit(); }
       // app-caused changes (lesson audio finished or failed) are announced only if the teacher was last using the agent
-      if (src === Source.SYSTEM && this.voiceSession && this.state === "SLEEP") this.speak(spoken(engine.step), false);
+      // and while the agent is on, it picks up again when lesson audio ends
+      if (src === Source.SYSTEM && (this.voiceSession || this.on) && this.state === "SLEEP" && !this.player.isPlaying()) this.speak(spoken(engine.step), false);
     });
   }
   subscribe(f) { this.listeners.add(f); return () => this.listeners.delete(f); }
@@ -377,7 +378,8 @@ export class VoiceOrchestrator {
    */
   afterButton(result, read) {
     this.voiceSession = false;
-    if (this.player.isPlaying()) return; // never talk over lesson audio (FR-61)
+    // never talk or listen over lesson audio (FR-61); while on, it picks up again when the audio ends
+    if (this.player.isPlaying()) { if (this.state === "LISTENING") this.sleep(); return; }
     if (read && result) this.speak(result, false);
     else if (this.on && this.state === "SLEEP" && this.canListen()) this.listen(false); // still on: keep listening
   }
