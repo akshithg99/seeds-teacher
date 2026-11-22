@@ -117,7 +117,7 @@ test("tabs parse and change summary", () => {
 // ---------------------------------------------------------------- engine: tabs, suggestions, undo
 
 async function openSyncedTik() {
-  await go("plan", "c6", "Science", "6-magnets", "6-magnets-2", "yes");
+  await go("plan", "c6", "Science", "6-magnets", "yes");
   assert.equal(id(), "plan_review");
   await go("tik");
   assert.equal(id(), "tik_view");
@@ -179,8 +179,8 @@ test("approve cannot be undone", async () => {
 
 test("lesson audio comes only from Content Studio; without it the lesson is taught from the TIK (8.3)", async () => {
   e.setClassLang(9, "English");
-  await e.fillDetails("plan", 9, "motion", "acceleration", Source.VOICE, "Science");
-  assert.equal(e.hasSyncedAudio(e.topicOf({ topicId: e.draft.topicId })), false);
+  await e.fillDetails("plan", 9, "motion", null, Source.VOICE, "Science");
+  assert.equal(Curriculum.chapter(e.draft.chapterId).audio, undefined); // Motion has no recording
   await go("yes");
   assert.equal(id(), "plan_review");
   assert.ok(e.lesson().tikOnly && !e.lesson().audio.length);
@@ -200,7 +200,7 @@ test("Course questions can be used as they are, with no approval (FR-111)", asyn
 test("audio that cannot play falls back to teacher-led in one step (FR-38)", async () => {
   e.audio = { ...noAudio, play: () => false };
   e.setClassLang(7, "English");
-  await go("plan", "c7", "Maths", "7m-decimals", "7m-decimals-2", "yes", "tik", "use_as_is"); // a chapter with a Content Studio TIK and recording
+  await go("plan", "c7", "Maths", "7m-decimals", "yes", "tik", "use_as_is"); // a chapter with a Content Studio TIK and recording
   await e.choose("approve", Source.BUTTON, true); // questions
   await e.choose("use", Source.BUTTON); // the recording
   await go("open", "start", "audio");
@@ -234,7 +234,7 @@ test("opening requests offline", async () => {
 
 test("a chapter recording synced from Content Studio is offered for every topic of the chapter and played as a file", async () => {
   e.setClassLang(7, "English");
-  await go("plan", "c7", "Maths", "7m-decimals", "7m-decimals-2", "yes", "tik", "use_as_is");
+  await go("plan", "c7", "Maths", "7m-decimals", "yes", "tik", "use_as_is");
   assert.equal(e.lesson().tikState, "SYNCED_IN_USE"); // the chapter's TIK comes from Content Studio too
   await e.choose("approve", Source.BUTTON, true); // questions
   assert.equal(id(), "audio_review");

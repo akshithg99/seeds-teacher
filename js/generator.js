@@ -102,18 +102,18 @@ export class ContentGenerator {
     return toTik(d, tik.header, provenance, tik.scope, request, tik.references, lang);
   }
 
-  /** F17: question sets for the topic and the chapter overview. Course questions first (FR-70, FR-111). */
-  async questionSets(ch, topic, tik, lang, request = null) {
-    if (!this.online) return Offline.questionSets(ch, topic);
+  /** F17: question sets for the chapter overview and every topic of the chapter. Course questions first (FR-70, FR-111). */
+  async questionSets(ch, tik, lang, request = null) {
+    if (!this.online) return Offline.questionSets(ch);
     const overviewCourse = (ch.topics[0] && ch.topics[0].checkQuestions.slice(0, 1)) || [];
     const base = [
       { key: "overview", title: `Chapter overview: ${ch.name}`, discussion: [], check: overviewCourse, fromCourse: overviewCourse.length, approved: false },
-      { key: topic.id, title: `Topic: ${topic.name}`, discussion: [], check: topic.checkQuestions, fromCourse: topic.checkQuestions.length, approved: false },
+      ...ch.topics.map((t) => ({ key: t.id, title: `Topic: ${t.name}`, discussion: [], check: t.checkQuestions, fromCourse: t.checkQuestions.length, approved: false })),
     ];
-    let u = `Prepare question sets for class ${ch.classNum}.\n${courseText(ch, topic)}`;
+    let u = `Prepare question sets for class ${ch.classNum}.\n${courseText(ch)}`;
     if (tik) u += `\nTIK activities: ${TikTabs.activities(tik).map(TikTabs.actText).join(" | ")}`;
-    u += `\nSets: key "overview" (chapter overview) and key "${topic.id}" (topic ${topic.name}).`;
-    u += `\nCourse check questions already present: overview=${JSON.stringify(overviewCourse)}, topic=${JSON.stringify(topic.checkQuestions)}. Do not repeat them.`;
+    u += `\nSets: key "overview" (chapter overview), and one per topic: ${ch.topics.map((t) => `key "${t.id}" (topic ${t.name})`).join(", ")}.`;
+    u += `\nCourse check questions already present: ${JSON.stringify(Object.fromEntries(base.map((b) => [b.key, b.check])))}. Do not repeat them.`;
     if (request) u += `\nThe teacher asks for this change: "${request}"`;
     u += "\nFor each set give 2 discussion questions (for after the audio) and 1 extra understanding-check question.";
     const d = await this.claude.complete(COMMON + "\n" + guardrails(ch.classNum) + langRule(lang) + "\nEvery question must work when heard once and answered aloud. A show of hands does not work.", u, { schema: QS_SCHEMA, maxTokens: 6000 });
@@ -124,8 +124,8 @@ export class ContentGenerator {
   }
 
   /** Offline: null when the request is not understood. */
-  async reviseQuestions(ch, topic, tik, current, request, lang) {
-    return this.online ? this.questionSets(ch, topic, tik, lang, request) : Offline.reviseQuestions(current, request);
+  async reviseQuestions(ch, tik, current, request, lang) {
+    return this.online ? this.questionSets(ch, tik, lang, request) : Offline.reviseQuestions(current, request);
   }
 
   /** F8: a multiple-choice quiz with an answer key, for a whole chapter or some of its topics (v5.4 8.6). */

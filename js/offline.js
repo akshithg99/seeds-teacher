@@ -232,16 +232,18 @@ export const REVISE_HINT = "I understand: pairs, groups, shorter, simpler, more 
 
 // ---------------------------------------------------------------- questions, quiz
 
-export function questionSets(ch, tp) {
-  const kw = keyword(tp);
+export function questionSets(ch) {
   const overviewCourse = (ch.topics[0] && ch.topics[0].checkQuestions.slice(0, 1)) || [];
   return [
     { key: "overview", title: `Chapter overview: ${ch.name}`, lang: "English",
       discussion: [`What is one new thing you learned about ${ch.name.toLowerCase()} today?`, "Which part was the most surprising, and why?"],
       check: overviewCourse.length ? overviewCourse : [`Tell me one fact from ${ch.name}.`], fromCourse: overviewCourse.length, approved: false },
-    { key: tp.id, title: `Topic: ${tp.name}`, lang: "English",
-      discussion: [`In your own words, what did the audio say about ${kw}?`, `Where have you noticed ${kw} at home or on the way to school?`],
-      check: [...tp.checkQuestions, `Tell me one fact about ${kw} in your own words.`], fromCourse: tp.checkQuestions.length, approved: false },
+    ...ch.topics.map((tp) => {
+      const kw = keyword(tp);
+      return { key: tp.id, title: `Topic: ${tp.name}`, lang: "English",
+        discussion: [`In your own words, what have we learned about ${kw}?`, `Where have you noticed ${kw} at home or on the way to school?`],
+        check: [...tp.checkQuestions, `Tell me one fact about ${kw} in your own words.`], fromCourse: tp.checkQuestions.length, approved: false };
+    }),
   ];
 }
 

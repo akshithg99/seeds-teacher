@@ -60,7 +60,7 @@ test("cancelling a Claude turn while it works applies nothing (FR-99)", async ()
 
 test("a commit by voice needs its own word", async () => {
   await e.choose("plan", Source.BUTTON);
-  await e.choose("c6", Source.BUTTON); await e.choose("Science", Source.BUTTON); await e.choose("__more", Source.BUTTON); await e.choose("6-measure", Source.BUTTON); await e.choose("6-measure-1", Source.BUTTON); await e.choose("yes", Source.BUTTON);
+  await e.choose("c6", Source.BUTTON); await e.choose("Science", Source.BUTTON); await e.choose("__more", Source.BUTTON); await e.choose("6-measure", Source.BUTTON); await e.choose("yes", Source.BUTTON);
   await v.handle("english");
   assert.ok(e.pending, "language is read back first");
   await v.handle("yes");
@@ -76,11 +76,10 @@ test("waking greets, then listens; work in progress is said aloud", async () => 
   v.sleep(); v.wake();
   assert.equal(out.said.at(-1), "Yes, how can I help?");
   // a voice request that prepares something says what it is doing
-  await e.choose("plan", Source.BUTTON); await e.choose("c6", Source.BUTTON); await e.choose("Science", Source.BUTTON); await e.choose("__more", Source.BUTTON); await e.choose("6-magnets", Source.BUTTON); await e.choose("6-magnets-2", Source.BUTTON);
-  e.setClassLang(6, "English"); await e.choose("yes", Source.BUTTON); await e.choose("topic_tik", Source.BUTTON);
-  await v.handle("skip");
-  assert.deepEqual(out.notes, ["Preparing your lesson plan."]);
-  assert.equal(e.step.id, "tik_review");
+  await e.choose("plan", Source.BUTTON); await e.choose("c6", Source.BUTTON); await e.choose("Science", Source.BUTTON); await e.choose("__more", Source.BUTTON); await e.choose("6-magnets", Source.BUTTON);
+  e.setClassLang(6, "English"); await v.handle("yes");
+  assert.deepEqual(out.notes, ["Preparing your lesson."]);
+  assert.equal(e.step.id, "plan_review");
 });
 
 test("one request and one yes plan the whole lesson, then the teacher reviews it", async () => {
@@ -88,7 +87,7 @@ test("one request and one yes plan the whole lesson, then the teacher reviews it
   v.awake = true;
   await v.handle("Plan Class 7 Science for Thursday");
   assert.equal(e.step.id, "plan_confirm");
-  assert.match(out.said.at(-1), /^Class 7, science[.] Start with chapter 1, The Ever-Evolving World of Science, topic [^?]+[?]$/);
+  assert.match(out.said.at(-1), /^Class 7, science[.] Start with chapter 1, The Ever-Evolving World of Science[?]$/);
   await v.handle("yes");
   assert.equal(e.step.id, "plan_review");
   assert.ok(out.notes.includes("Preparing your lesson."));

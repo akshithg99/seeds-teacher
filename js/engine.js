@@ -93,8 +93,9 @@ export class Engine {
   approvedAudio(l) { return l ? l.audio.filter((a) => a.approved) : []; }
   lessonName(l) {
     if (!l) return "this lesson";
-    const ch = this.chapterOf(l), tp = this.topicOf(l);
-    return `Class ${l.classNum} ${l.subject}, ${ch && ch.name}: ${tp && tp.name}` + (l.followUpFor ? " (follow-up)" : "");
+    // a lesson is for the whole chapter; only a follow-up is about one topic
+    const ch = this.chapterOf(l), tp = l.followUpFor ? this.topicOf(l) : null;
+    return `Class ${l.classNum} ${l.subject}, ${ch && ch.name}` + (tp ? `: ${tp.name} (follow-up)` : l.followUpFor ? " (follow-up)" : "");
   }
   /** The class's language (FR-109); null until the teacher has said it. */
   classLang(c) { return c != null ? this.st.classLang[String(c)] || null : null; }
@@ -423,20 +424,17 @@ export class Engine {
         }
         if (topic) {
           const tp = Curriculum.findTopic(Curriculum.chapter(d.chapterId), topic);
-          if (tp) { const cht = Curriculum.chapterOfTopic(tp.id); d.topicId = tp.id; d.chapterId = cht.id; d.subject = cht.subject; }
+          if (tp) { const cht = Curriculum.chapterOfTopic(tp.id); d.chapterId = cht.id; d.subject = cht.subject; } // a topic names its chapter
           else notes.push(`I didn't find a topic called ${topic}.`);
         }
         if (d.classNum != null) caught.push(`class ${d.classNum}`, ...(d.subject ? [d.subject.toLowerCase()] : []));
         const chx = Curriculum.chapter(d.chapterId);
         if (chx) caught.push(`chapter ${chx.number}, ${chx.name}`);
-        if (d.topicId) caught.push(Curriculum.topic(d.topicId).name);
         // the class and subject are known but not the chapter: offer where the class is up to (FR-106), as a yes-or-no question
         if (d.classNum != null && d.subject && !d.chapterId && !chapter) { const nc = this.nextChapter(d.classNum, d.subject); if (nc) d.chapterId = nc.id; }
-        if (d.chapterId && !d.topicId) { const nt = this.nextTopic(Curriculum.chapter(d.chapterId)); d.topicId = nt && nt.id; }
         if (d.classNum == null) this.go("plan_class");
         else if (!d.subject) this.go(askSubject("plan_chapter"));
         else if (!d.chapterId) this.go("plan_chapter");
-        else if (!d.topicId) this.go("plan_topic");
         else this.go("plan_confirm");
       }
     }
@@ -468,14 +466,14 @@ export class Engine {
     return ch.topics.find((t) => !done.has(t.id)) || ch.topics[0] || null;
   }
 
-  /** What to plan next, from the class taught last: the chapter's next topic, or the next chapter once every topic is covered. */
+  /** What to plan next, from the class taught last: the same chapter until every topic is covered, then the next chapter. */
   upNext() {
     const s = [...this.st.sessions].reverse().find((x) => x.endedAt != null && this.lesson(x.lessonId));
     const l = s && this.lesson(s.lessonId);
     const ch = l && this.nextChapter(l.classNum, l.subject);
-    return ch ? { chapter: ch, topic: this.nextTopic(ch) } : null;
+    return ch ? { chapter: ch } : null;
   }
-  upNextText(u) { return `chapter ${u.chapter.number}, ${u.chapter.name}: ${u.topic.name}`; }
+  upNextText(u) { return `chapter ${u.chapter.number}, ${u.chapter.name}`; }
 
   /** FR-106: next chapter is the one after the last taught; otherwise the first in contents order. */
   nextChapter(classNum, subject, after = null) {
@@ -495,13 +493,6 @@ export class Engine {
     return list[i + 1] || list[list.length - 1] || null;
   }
 
-  previousContext(ch, tp) {
-    const s = [...this.st.sessions].reverse().find((x) => { const l = this.lesson(x.lessonId); return x.endedAt != null && x.coverage === "some" && l && l.chapterId === ch.id && l.topicId === tp.id; });
-    if (!s) return null;
-    const rec = [...this.st.records].reverse().find((r) => r.sessionId === s.id && r.saved);
-    return `Last taught on ${this.fmtDate(s.startedAt)}. Some covered: ${this.coveredText(s)}. Reason: ${s.reason || "not given"}.` + (rec && rec.summary ? ` Class record: ${rec.summary}` : "");
-  }
-
   coveredText(s) {
     const t = s.covered.map((k) => (k === "overview" ? "the overview" : k === "topic-part" ? "part of the topic" : (Curriculum.topic(k) || {}).name || k)).join(", ");
     return t || "nothing from the plan";
@@ -514,7 +505,6 @@ export class Engine {
   nextPlanningStep(l) {
     if (!l.tik) return "plan_tik_source";
     if (l.tikState === "DRAFT") return "tik_review";
-    if (!l.modeChosen) return "plan_tik_mode";
     if (!l.questionSets.length && !l.questionsSkipped) return "qs_offer";
     if (l.questionSets.some((q) => !q.approved)) return "qs_review";
     if (!l.audio.length && !l.tikOnly) return "audio_offer";
@@ -538,14 +528,14 @@ export class Engine {
 
   ensureLessonForDraft() {
     const d = this.draft;
-    const ch = Curriculum.chapter(d.chapterId), tp = Curriculum.topic(d.topicId);
-    const existing = [...this.st.lessons].reverse().find((l) => l.chapterId === ch.id && l.topicId === tp.id && !this.taught(l) && !l.followUpFor);
+    const ch = Curriculum.chapter(d.chapterId);
+    const existing = [...this.st.lessons].reverse().find((l) => l.chapterId === ch.id && !this.taught(l) && !l.followUpFor);
     if (existing) {
       d.lessonId = existing.id;
       return this.lesson();
     }
-    let l = { id: this.newId(), classNum: ch.classNum, subject: ch.subject, chapterId: ch.id, topicId: tp.id,
-      tik: null, tikState: "NONE", tikBefore: null, usePreviousContext: false, questionSets: [], questionsSkipped: false,
+    let l = { id: this.newId(), classNum: ch.classNum, subject: ch.subject, chapterId: ch.id, topicId: null,
+      tik: null, tikState: "NONE", tikBefore: null, questionSets: [], questionsSkipped: false,
       audio: [], tikOnly: false, modeChosen: false, followUpFor: null, createdAt: this.now() };
     // Reuse before generate (BR-11): a ready chapter TIK already in the workspace
     const w = this.workspaceChapterTik(ch);
@@ -557,9 +547,7 @@ export class Engine {
 
   /** After the lesson details are confirmed (and the class language is known): prepare the lesson. */
   async continuePlan() {
-    const chx = Curriculum.chapter(this.draft.chapterId), tpx = Curriculum.topic(this.draft.topicId);
-    const nl = this.ensureLessonForDraft();
-    if (this.previousContext(chx, tpx) && !nl.tik) { this.go("plan_previous"); return ""; }
+    this.ensureLessonForDraft();
     return this.prepareAll();
   }
 
@@ -570,7 +558,7 @@ export class Engine {
    */
   async prepareAll() {
     const id = this.draft.lessonId, l0 = this.lesson();
-    const ch = this.chapterOf(l0), tp = this.topicOf(l0), lang = this.classLang(l0.classNum);
+    const ch = this.chapterOf(l0), lang = this.classLang(l0.classNum);
     const ok = await this.working("Preparing your lesson…", async () => {
       if (!this.lesson().tik) {
         const t = ch.syncedTik || await this.gen.chapterTik(ch, lang);
@@ -580,13 +568,13 @@ export class Engine {
       this.updateLesson(id, (x) => ({ ...x, modeChosen: true }));
       const l = this.lesson();
       if (!l.questionSets.length && !l.questionsSkipped) {
-        const sets = await this.gen.questionSets(ch, tp, l.tik, lang);
+        const sets = await this.gen.questionSets(ch, l.tik, lang);
         if (!sets) throw new Error("The questions could not be prepared.");
         this.updateLesson(id, (x) => ({ ...x, questionSets: sets }));
       }
       if (!l.audio.length && !l.tikOnly) {
-        if (!this.hasSyncedAudio(tp)) this.updateLesson(id, (x) => ({ ...x, tikOnly: true }));
-        else { const clip = this.syncedClip(tp); this.updateLesson(id, (x) => ({ ...x, audio: [clip] })); this.draft.audioClipId = clip.id; }
+        if (!ch.audio) this.updateLesson(id, (x) => ({ ...x, tikOnly: true }));
+        else { const clip = this.syncedClip(ch); this.updateLesson(id, (x) => ({ ...x, audio: [clip] })); this.draft.audioClipId = clip.id; }
       }
       return true;
     });
@@ -596,12 +584,8 @@ export class Engine {
     return this.langNote(l0.classNum, t && t.lang).trim();
   }
 
-  /** Content Studio has audio for this topic: its chapter's recording. */
-  hasSyncedAudio(tp) { const ch = tp && Curriculum.chapterOfTopic(tp.id); return !!(ch && ch.audio); }
-
-  /** Content Studio's audio for a topic: its chapter's recording. */
-  syncedClip(tp) {
-    const ch = Curriculum.chapterOfTopic(tp.id);
+  /** Content Studio's audio for a chapter: its recording. */
+  syncedClip(ch) {
     // shortcut: the recording's language is not in its file name, so it is taken as English; set it per chapter when known
     return { id: `cs-${ch.id}`, name: `Chapter ${ch.number} recording: ${ch.name}`, provenance: "Synced from Content Studio", src: ch.audio.src,
       lang: "English", approved: false, reviewed: false, durationSec: ch.audio.minutes * 60 };
@@ -617,7 +601,7 @@ export class Engine {
     for (const ch of Curriculum.chapters) {
       const where = `Class ${ch.classNum} ${ch.subject}, ${ch.name}`;
       if (ch.syncedTik) tiks.push({ key: `cs:${ch.id}`, fromCS: true, title: `${where}: chapter TIK`, tik: ch.syncedTik, status: "Ready to use", lang: ch.syncedTik.lang });
-      if (ch.audio) audio.push({ key: `csa:${ch.id}`, fromCS: true, title: `${where}: chapter recording`, clip: this.syncedClip(ch.topics[0]), status: "Ready to use", lang: "English" });    }
+      if (ch.audio) audio.push({ key: `csa:${ch.id}`, fromCS: true, title: `${where}: chapter recording`, clip: this.syncedClip(ch), status: "Ready to use", lang: "English" });    }
     for (const l of this.st.lessons) {
       if (l.tik && !String(l.tik.provenance).startsWith("Synced")) {
         tiks.push({ key: `l:${l.id}`, fromCS: false, title: `${this.lessonName(l)}: ${l.tik.scope === "chapter" ? "chapter" : "topic"} TIK`, tik: l.tik,
@@ -633,23 +617,23 @@ export class Engine {
   }
   workspaceItem(key) { const w = this.workspace(); return [...w.tiks, ...w.audio, ...w.quizzes].find((x) => x.key === key) || null; }
 
+  /** After a class: a follow-up for each topic few or none of the class could answer, and for a noted difficulty. */
   proposePatterns(lessonId, sessionId) {
-    const l = this.lesson(lessonId), tp = this.topicOf(l);
-    if (!tp) return;
-    const signals = [];
+    const l = this.lesson(lessonId), ch = this.chapterOf(l);
     const s = this.st.sessions.find((x) => x.id === sessionId);
-    const r = s && s.checkResults[tp.id];
-    if (r === "few" || r === "none") signals.push(`Learning check: ${r} of the class could answer`);
+    if (!ch || !s) return;
+    const weak = ch.topics.filter((t) => ["few", "none"].includes(s.checkResults[t.id]));
+    for (const t of weak) this.addPattern(t, l.classNum, lessonId, [`Learning check: ${s.checkResults[t.id]} of the class could answer`]);
     const rec = [...this.st.records].reverse().find((x) => x.sessionId === sessionId && x.saved);
     const note = rec && rec.notes.find((n) => /difficult/i.test(n));
-    if (note) signals.push(`You noted: "${note.slice(0, 80)}"`);
-    if (!signals.length) return;
-    this.addPattern(tp, l.classNum, lessonId, signals);
+    // a noted difficulty belongs to the last topic this class covered, or the one it was working towards
+    const covered = ch.topics.filter((t) => s.covered.includes(t.id));
+    if (note) this.addPattern(weak.at(-1) || covered.at(-1) || this.nextTopic(ch), l.classNum, lessonId, [`You noted: "${note.slice(0, 80)}"`]);
   }
 
   /** One follow-up per concept, for the class as a whole: new signals join an open one (v5.4 8.8). */
   addPattern(tp, classNum, lessonId, signals) {
-    const existing = this.st.patterns.find((p) => (p.topicId === tp.id || (lessonId && p.lessonId === lessonId)) && (p.state === "Proposed" || p.state === "Confirmed"));
+    const existing = this.st.patterns.find((p) => p.topicId === tp.id && (p.state === "Proposed" || p.state === "Confirmed"));
     if (existing) this.updatePattern(existing.id, (p) => ({ ...p, signals: [...new Set([...p.signals, ...signals])] }));
     else this.store.update((x) => ({ ...x, patterns: [...x.patterns, { id: this.newId(), lessonId, topicId: tp.id, classNum, concept: tp.name, signals, state: "Proposed", followUp: null }] }));
   }
@@ -767,7 +751,7 @@ export class Engine {
           case "next_topic": this.go("next_class"); break;
           case "plan_next": {
             const u = this.upNext(); if (!u) break;
-            d.clearPlanning(); d.classNum = u.chapter.classNum; d.subject = u.chapter.subject; d.chapterId = u.chapter.id; d.topicId = u.topic.id;
+            d.clearPlanning(); d.classNum = u.chapter.classNum; d.subject = u.chapter.subject; d.chapterId = u.chapter.id;
             this.go("plan_confirm"); break;
           }
           case "teach_pick": this.go("teach_pick"); break;
@@ -821,7 +805,7 @@ export class Engine {
       case "next_chapter":
         if (c === "start") {
           const nc = this.nextChapter(d.classNum, d.subject);
-          d.chapterId = nc.id; const nt = this.nextTopic(nc); d.topicId = nt && nt.id;
+          d.chapterId = nc.id;
           this.go("plan_confirm");
           return `Class ${nc.classNum}, ${nc.subject.toLowerCase()}, chapter ${nc.number}, ${nc.name}.`;
         }
@@ -840,8 +824,7 @@ export class Engine {
 
       // ---------------- F3 Plan the lesson
       case "plan_class": d.classNum = parseInt(c.slice(1), 10); d.subject = null; d.chapterId = null; d.topicId = null; d.subjectNext = "plan_chapter"; this.go("pick_subject"); break;
-      case "plan_chapter": d.chapterId = c; d.topicId = null; this.go("plan_topic"); break;
-      case "plan_topic": d.topicId = c; this.go("plan_confirm"); break;
+      case "plan_chapter": d.chapterId = c; d.topicId = null; this.go("plan_confirm"); break;
       case "plan_confirm":
         if (c === "yes") {
           const chx = Curriculum.chapter(d.chapterId);
@@ -852,17 +835,11 @@ export class Engine {
         // "no" keeps the class and asks for the chapter
         if (c === "change") { d.subject = (Curriculum.chapter(d.chapterId) || {}).subject || d.subject; d.chapterId = null; d.topicId = null; this.go(d.classNum != null ? "plan_chapter" : "plan_class"); }
         break;
-      case "plan_previous": {
-        this.updateLesson(l.id, (x) => ({ ...x, usePreviousContext: c === "use" }));
-        const said = c === "use" ? "I'll use what happened last time." : "Starting fresh.";
-        return [said, await this.prepareAll()].filter(Boolean).join(" ");
-      }
       case "plan_review":
         if (c === "review") this.go(this.nextPlanningStep(l));
         if (c === "tik") this.go(l.tikState === "SYNCED_IN_USE" ? "tik_view" : "tik_review");
         if (c === "questions") this.go("qs_review");
         if (c === "audio") { d.audioClipId = l.audio.length ? l.audio[0].id : null; this.go("audio_review"); }
-        if (c === "topic_tik") this.go("plan_need");
         break;
       case "plan_tik_source": case "tik_view":
         if (c === "use_as_is") {
@@ -882,17 +859,12 @@ export class Engine {
           return "The chapter TIK is ready for your review." + this.langNote(l.classNum, t.lang);
         }
         break;
-      case "plan_tik_mode":
-        if (c === "chapter") { this.updateLesson(l.id, (x) => ({ ...x, modeChosen: true })); this.go(this.nextPlanningStep(this.lesson())); return "Teaching from the chapter TIK."; }
-        if (c === "topic") this.go("plan_need");
-        break;
-      case "plan_need": if (c === "skip") return this.makeTopicTik(null); break;
       case "tik_review":
         if (c === "approve") {
           this.updateLesson(l.id, (x) => ({ ...x, tikState: "APPROVED", modeChosen: x.modeChosen || (x.tik && x.tik.scope === "topic") }));
           d.changeCount = 0; d.tries = 0;
           this.go(this.nextPlanningStep(this.lesson()));
-          return `Approved. The TIK is ready for ${tp.name}.`;
+          return `Approved. The TIK is ready for ${(tp || ch).name}.`;
         }
         if (c === "change" || c === "edit") { d.checkpointFor = "tik"; this.go("tik_change"); }
         if (c === "apply_suggestions") return this.applySuggestions(l, l.tik);
@@ -917,7 +889,7 @@ export class Engine {
       // ---------------- F17 questions at planning
       case "qs_offer":
         if (c === "prepare") {
-          const sets = await this.working("Preparing questions for each topic…", () => this.gen.questionSets(ch, tp, l.tik, this.classLang(l.classNum)));
+          const sets = await this.working("Preparing questions for each topic…", () => this.gen.questionSets(ch, l.tik, this.classLang(l.classNum)));
           if (!sets) return this.failed("prepare the questions");
           this.updateLesson(l.id, (x) => ({ ...x, questionSets: sets }));
           d.changeCount = 0;
@@ -945,8 +917,8 @@ export class Engine {
 
       // ---------------- F5 Prepare audio
       case "audio_offer":
-        if (c === "use" && this.hasSyncedAudio(tp)) {
-          const clip = { ...this.syncedClip(tp), approved: true, reviewed: true };
+        if (c === "use" && ch.audio) {
+          const clip = { ...this.syncedClip(ch), approved: true, reviewed: true };
           this.updateLesson(l.id, (x) => ({ ...x, audio: [clip] }));
           d.audioClipId = clip.id;
           this.go("lesson_saved");
@@ -1202,7 +1174,8 @@ export class Engine {
       case "followup_change": if (c === "back") this.go("followup_pattern"); break;
       case "followup_type": {
         const p = this.st.patterns.find((x) => x.id === d.patternId);
-        const base = this.lesson(p.lessonId) || this.topicLesson(p.topicId);
+        // a follow-up is about one topic, the one the class found hard
+        const base = this.topicLesson(p.topicId);
         const lang = this.classLang(base.classNum);
         if (c === "tik") {
           const instr = `A simpler version for a class that has not yet understood ${p.concept}.`;
@@ -1245,17 +1218,6 @@ export class Engine {
     return q;
   }
 
-  async makeTopicTik(need) {
-    const l = this.lesson(), ch = this.chapterOf(l), tp = this.topicOf(l);
-    const prev = l.usePreviousContext ? this.previousContext(ch, tp) : null;
-    const t = await this.working("Preparing your lesson plan…", () => this.gen.topicTik(ch, tp, need, null, prev, this.classLang(l.classNum)));
-    if (!t) return this.failed("prepare the lesson plan");
-    this.updateLesson(l.id, (x) => ({ ...x, tik: t, tikState: "DRAFT", tikBefore: null, modeChosen: true }));
-    this.draft.changeCount = 0; this.draft.tries = 0;
-    this.go("tik_review");
-    return "Your topic TIK draft is ready." + this.langNote(l.classNum, t.lang);
-  }
-
   /** Apply every suggested change on the Summary tab. The synced TIK itself never changes (FR-39). */
   applySuggestions(l, base) {
     const applied = Offline.applyAll(base, this.chapterOf(l));
@@ -1269,7 +1231,6 @@ export class Engine {
   async handleText(stepId, text) {
     const l = this.lesson();
     switch (stepId) {
-      case "plan_need": return this.makeTopicTik(text);
       case "tik_change": {
         const ch = this.chapterOf(l);
         const base = (l && l.tik) || (ch && ch.syncedTik);
@@ -1287,7 +1248,7 @@ export class Engine {
         return `Change applied. ${what} It needs your approval.`;
       }
       case "qs_change": {
-        let out = await this.working("Updating the questions…", async () => (await this.gen.reviseQuestions(this.chapterOf(l), this.topicOf(l), l.tik, l.questionSets, text, this.classLang(l.classNum))) || []);
+        let out = await this.working("Updating the questions…", async () => (await this.gen.reviseQuestions(this.chapterOf(l), l.tik, l.questionSets, text, this.classLang(l.classNum))) || []);
         if (!out) return this.failed("update the questions");
         if (!out.length) return "I couldn't apply that. Try: easier, harder, fewer or more questions.";
         this.draft.changeCount++;

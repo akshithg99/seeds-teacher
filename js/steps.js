@@ -57,7 +57,9 @@ export function buildStep(e) {
   const r = e.route, d = e.draft, st = e.st;
   const l = e.lesson(), ch = e.chapterOf(l), tp = e.topicOf(l);
   const lang = l ? e.classLang(l.classNum) : null;
-  const lessonKnown = l ? [["Class", `${l.classNum}`], ["Subject", l.subject], ["Chapter", `${ch && ch.number}. ${ch && ch.name}`], ["Topic", (tp && tp.name) || ""], ...(lang ? [["Language", lang]] : [])] : [];
+  // a lesson is for the whole chapter; only a follow-up names its topic
+  const learn = l && l.followUpFor && tp ? tp.definitions : ch ? ch.topics.map((t) => `${t.name}: ${t.definitions[0]}`) : [];
+  const lessonKnown = l ? [["Class", `${l.classNum}`], ["Subject", l.subject], ["Chapter", `${ch && ch.number}. ${ch && ch.name}`], ...(tp && l.followUpFor ? [["Topic", tp.name]] : []), ...(lang ? [["Language", lang]] : [])] : [];
 
   switch (r.id) {
     // ======================================================== platform
@@ -189,22 +191,13 @@ export function buildStep(e) {
         suggestion: next ? { choiceId: next.id, reason: e.st.sessions.some((x) => x.endedAt != null && (e.lesson(x.lessonId) || {}).classNum === c && (e.lesson(x.lessonId) || {}).subject === d.subject) ? "because it's where your class is up to" : "because it comes first in the textbook" } : null });
     }
 
-    case "plan_topic": {
-      const chx = Curriculum.chapter(d.chapterId);
-      const next = e.nextTopic(chx);
-      return makeStep("plan_topic", Flow.PLAN, "Topic", "Which topic is this lesson on?",
-        paged(chx.topics.map((x) => choice(x.id, x.name + (next && x.id === next.id ? " (next)" : ""), { words: [x.name.toLowerCase()], suggested: !!next && x.id === next.id })), r.page),
-        { known: [["Class", `${chx.classNum}`], ["Chapter", `${chx.number}. ${chx.name}`]], progress: planProgress(0),
-          suggestion: next ? { choiceId: next.id, reason: "because it's the next topic your class hasn't finished" } : null });
-    }
-
     case "plan_confirm": {
-      const chx = Curriculum.chapter(d.chapterId), tpx = Curriculum.topic(d.topicId);
-      const where = `chapter ${chx && chx.number}, ${chx && chx.name}, topic ${tpx && tpx.name}`;
+      const chx = Curriculum.chapter(d.chapterId);
+      const where = `chapter ${chx && chx.number}, ${chx && chx.name}`;
       const taught = !!chx && st.sessions.some((x) => x.endedAt != null && (e.lesson(x.lessonId) || {}).classNum === chx.classNum && (e.lesson(x.lessonId) || {}).subject === chx.subject);
       return makeStep("plan_confirm", Flow.PLAN, "Your lesson", taught ? `Next is ${where}. Continue from here?` : `Start with ${where}?`,
         [choice("yes", "Yes, continue", { words: ["yes", "right", "correct", "continue"] }), choice("change", "Change something", { words: ["no", "change"] })],
-        { known: [["Class", `${chx && chx.classNum}`], ["Subject", chx && chx.subject], ["Chapter", `${chx && chx.number}. ${chx && chx.name}`], ["Topic", `${tpx && tpx.name}`],
+        { known: [["Class", `${chx && chx.classNum}`], ["Subject", chx && chx.subject], ["Chapter", `${chx && chx.number}. ${chx && chx.name}`],
           ...(chx && e.classLang(chx.classNum) ? [["Language", e.classLang(chx.classNum)]] : [])],
           progress: planProgress(0) });
     }
@@ -219,19 +212,13 @@ export function buildStep(e) {
         choice("tik", "Open the TIK", { words: ["tik", "the tik", "open the tik"], enabled: !!(l && l.tik), whyDisabled: "No TIK yet." }),
         choice("questions", "Open the questions", { words: ["questions", "the questions", "open the questions"], enabled: sets.length > 0, whyDisabled: "No questions yet." }),
         choice("audio", "Open the audio", { words: ["audio", "the audio", "open the audio"], enabled: clips.length > 0, whyDisabled: "No audio yet." }),
-        ...(l && l.tik && l.tik.scope === "chapter" ? [choice("topic_tik", "Make a topic TIK for my class", { words: ["topic tik", "make a topic tik", "for my class"] })] : []),
       ], { announce: todo ? "Ready. Please review your lesson." : "Your lesson is ready.", known: lessonKnown, progress: planProgress(1), secondary: [homeBtn("Later")],
         sections: [
           section("TIK", [l && l.tik ? `${l.tik.scope === "topic" ? "Topic" : "Chapter"} TIK · ${tikStatus}` : tikStatus]),
-          section("Questions", [sets.length ? `${plural(sets.length, "set", "sets")}, for the overview and ${tp && tp.name} · ${sets.every((s) => s.approved) ? "Approved" : "Not approved yet"}` : l && l.questionsSkipped ? "Skipped" : "Not prepared"]),
+          section("Questions", [sets.length ? `${plural(sets.length, "set", "sets")}, for the overview and each topic · ${sets.every((s) => s.approved) ? "Approved" : "Not approved yet"}` : l && l.questionsSkipped ? "Skipped" : "Not prepared"]),
           section("Audio", clips.length ? clips.map((a) => `${a.name} · ${a.approved ? "In use" : "Not used yet"}`) : [l && l.tikOnly ? "Taught from the TIK, no audio" : "Not prepared"]),
         ] });
     }
-
-    case "plan_previous":
-      return makeStep("plan_previous", Flow.PLAN, "Last time", "Use previous context, or start fresh?",
-        [choice("use", "Use previous context", { words: ["use", "previous"] }), choice("fresh", "Start fresh", { words: ["fresh", "new"] })],
-        { known: lessonKnown, sections: [section("Teaching history", [e.previousContext(ch, tp) || ""])], progress: planProgress(0) });
 
     case "plan_tik_source":
       if (ch && ch.syncedTik) return makeStep("plan_tik_source", Flow.PLAN, "Chapter TIK", "A TIK is ready for this chapter. Use it as it is, or open it and check it?",
@@ -254,28 +241,12 @@ export function buildStep(e) {
         help: TIK_HELP });
     }
 
-    case "plan_tik_mode": {
-      const [choices, sug] = historySuggestion(e, "plan_tik_mode", [
-        choice("chapter", "Teach from the chapter TIK", { words: ["chapter", "chapter tik"] }),
-        choice("topic", "Create a topic TIK", { words: ["topic", "topic tik", "create"] }),
-      ]);
-      return makeStep("plan_tik_mode", Flow.PLAN, "This lesson", "Teach from the chapter TIK, or create a topic TIK?", choices,
-        { suggestion: sug, known: lessonKnown, progress: planProgress(1), announce: `The chapter TIK is ${l && l.tikState === "SYNCED_IN_USE" ? "in use from Content Studio" : "approved"}.` });
-    }
-
-    case "plan_need":
-      return makeStep("plan_need", Flow.PLAN, "Your class", `Tell me about your class and what they need for ${tp && tp.name}. Or say skip.`,
-        [choice("skip", "Skip, use the defaults", { words: ["skip"] })],
-        { known: lessonKnown, progress: planProgress(1), announce: e.prepLine(l && l.classNum),
-          freeSpeech: { prompt: "For example: 12 students, mixed levels, 40 minutes, work in pairs, we have ring magnets", longWindow: true },
-          help: "Say how long the lesson is, how many students, whether levels are mixed, pairs or groups, and what materials you have." });
-
     case "tik_review": {
       const isDraft = l && l.tikState === "DRAFT";
       const panel = l && l.tik ? tikPanel(e, l.tik, l.tikBefore, { APPROVED: "Approved", SYNCED_IN_USE: "In use as it is" }[l.tikState] || "Not yet approved") : null;
       const has = panel && panel.suggestions.length;
       const choices = isDraft ? [
-        choice("approve", "Approve", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve this ${l.tik.scope} TIK for ${tp && tp.name}, so it can be used in class.` }),
+        choice("approve", "Approve", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve this ${l.tik.scope} TIK for ${(l.followUpFor && tp ? tp : ch).name}, so it can be used in class.` }),
         ...(has ? [choice("apply_suggestions", "Apply suggested changes", { words: ["apply", "apply suggestions", "suggested changes", "accept"] })] : []),
         choice("change", "Ask for a change", { words: ["change", "ask for a change", "edit"] }),
         choice("regenerate", "Try again", { words: ["try again", "regenerate", "again", "new version"] }),
@@ -314,7 +285,7 @@ export function buildStep(e) {
       const sets = (l && l.questionSets) || [];
       const qlang = sets[0] && sets[0].lang;
       return makeStep("qs_review", Flow.PLAN, "Review the questions", "Approve these questions, use only the Course's questions, ask for a change, or hear them?", [
-        choice("approve", "Approve questions", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve ${sets.length} question sets, for the overview and ${tp && tp.name}.` }),
+        choice("approve", "Approve questions", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve ${sets.length} question sets, for the overview and each topic.` }),
         choice("use_course", "Use only the Course's questions", { words: ["course", "use the course", "course questions", "as they are"] }),
         choice("change", "Ask for a change", { words: ["change"] }),
         choice("hear", "Hear them", { tier: Tier.READ, words: ["hear", "read"] }),
@@ -329,7 +300,7 @@ export function buildStep(e) {
 
     // ======================================================== F5 Prepare audio
     case "audio_offer":
-      if (!e.hasSyncedAudio(tp)) return makeStep("audio_offer", Flow.PLAN, "Audio", "Content Studio has no audio for this topic, so you'll teach from the TIK. Continue?",
+      if (!(ch && ch.audio)) return makeStep("audio_offer", Flow.PLAN, "Audio", "Content Studio has no audio for this chapter, so you'll teach from the TIK. Continue?",
         [choice("tik_only", "Continue with the TIK", { words: ["continue", "yes", "okay", "tik only"] })], { known: lessonKnown, progress: planProgress(3) });
       return makeStep("audio_offer", Flow.PLAN, "Audio", "Audio from Content Studio is ready. Use it?",
         [choice("use", "Use it", { words: ["use", "use it", "yes"] }), choice("tik_only", "Teach without it", { words: ["without", "teach without it", "no", "tik only"] })],
@@ -370,7 +341,7 @@ export function buildStep(e) {
         homeBtn(),
       ], { announce: `${e.lessonName(l)}. ` + (ok ? (e.approvedAudio(l).length ? "Ready to teach." : "Ready to teach, no audio yet.") + (e.resumeAt(l) ? ` It continues from ${e.resumeName(l)}, where the last class stopped.` : "") : "Not ready."),
         known: lessonKnown, contentLang: l && l.tik && l.tik.lang,
-        sections: [...(tp ? [section("What students learn (Course)", tp.definitions)] : []), ...(l && l.tik ? [section("Objectives", l.tik.objectives, { lang: l.tik.lang }), section("Materials required", TikTabs.materials(l.tik), { lang: l.tik.lang })] : [])] });
+        sections: [...(learn.length ? [section("What students learn (Course)", learn)] : []), ...(l && l.tik ? [section("Objectives", l.tik.objectives, { lang: l.tik.lang }), section("Materials required", TikTabs.materials(l.tik), { lang: l.tik.lang })] : [])] });
     }
 
     case "teach_step": {
@@ -391,7 +362,7 @@ export function buildStep(e) {
           choice("end", "End class", { tier: Tier.COMMIT, words: ["end class", "end"], commitWord: "end class", readBack: "I'll end the class and ask what was covered." }),
         ], { announce: cur ? `${cur.name}. ` + inLang(tl, [...cur.lines, ...cur.acts.map(TikTabs.actText)].join(" ")) : null, inClass: true, contentLang: tl,
           known: [["Lesson", e.lessonName(l)], ["Method", "Your choice: activity, teacher-led, audio, discussion or tactile materials"]],
-          sections: [...(i === 0 && tp ? [section("What students learn (Course)", tp.definitions)] : []),
+          sections: [...(i === 0 && learn.length ? [section("What students learn (Course)", learn)] : []),
             ...(cur && cur.lines.length ? [section(cur.name, cur.lines, { lang: tl })] : []),
             ...(cur ? cur.acts.map((a) => section(a.name, [`Materials required: ${a.materials.join(", ") || "None"}`, ...a.flow.map((x, k) => `${k + 1}. ${x}`)], { lang: tl })) : [])],
           secondary: i > 0 ? [choice("prev", "Previous step", { words: ["previous", "previous step", "previous activity"] })] : [],
