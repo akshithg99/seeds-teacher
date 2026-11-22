@@ -5,7 +5,7 @@ import * as Offline from "./offline.js";
 import { buildStep } from "./steps.js";
 
 export const emptyState = () => ({
-  signedInPhone: null, rememberMe: true, voiceGuide: {}, speechRate: 1, bargeIn: false,
+  signedInPhone: null, rememberMe: true, voiceGuide: {}, speechRate: 1, audioRate: 1, bargeIn: false,
   classLang: {}, lessons: [], sessions: [], records: [], quizzes: [], patterns: [], events: [], committed: [],
 });
 
@@ -281,11 +281,13 @@ export class Engine {
         return `I suggested ${c ? c.label : s.suggestion.choiceId} ${s.suggestion.reason}.`;
       }
       case "undo": return this.undo(source);
+      case "audio_pause": if (this.audio.isPlaying()) this.audio.toggle(); return "Paused.";
       case "next_tab": return s.tik ? this.selectTab(this.tikTab + 1) : "There are no tabs here.";
       case "prev_tab": return s.tik ? this.selectTab(this.tikTab - 1) : "There are no tabs here.";
       case "sign_out": this.signOut(); this.notify(source); return "Signed out.";
       default:
         if (name.startsWith("tab:") && s.tik) return this.selectTab(parseInt(name.slice(4), 10) || 0);
+        if (name === "audio_play" || name.startsWith("seek")) { const r = this.audioGo(name); this.notify(source); return r; }
         return "";
     }
   }
@@ -584,6 +586,42 @@ export class Engine {
     this.go("plan_review");
     const t = this.lesson().tik;
     return this.langNote(l0.classNum, t && t.lang).trim();
+  }
+
+  /** The lesson's audio in class: the one picked, else the first approved. */
+  audioClip(l = this.lesson()) {
+    const list = l ? this.approvedAudio(l) : [];
+    return list.find((a) => a.id === this.draft.audioClipId) || list[0] || null;
+  }
+  /** Seconds into the recording where the last class stopped (0: from the start). */
+  audioAt(l, clip) { return (l && clip && l.audioAt && l.audioAt[clip.id]) || 0; }
+  /** Called by the player when a recording pauses, stops or ends in class, so the next class carries on from there. */
+  saveAudioAt(clip, sec) {
+    const l = this.lesson();
+    if (!l || !clip || !clip.src || this.step.flow !== Flow.TEACH || !l.audio.some((a) => a.id === clip.id)) return;
+    this.updateLesson(l.id, (x) => ({ ...x, audioAt: { ...x.audioAt, [clip.id]: Math.floor(sec) } }));
+  }
+  /**
+   * Voice on the audio screens: "play", "back 30 seconds" (seek:-30), "jump to minute 20" (seekto:1200).
+   * Plays from there; the audio starting again is the answer, so nothing is said over it.
+   */
+  audioGo(name) {
+    const l = this.lesson(), clip = this.audioClip(l);
+    if (!clip) return "There is no audio for this lesson.";
+    const dur = clip.durationSec, has = this.audio.hasMedia(), finished = this.route.id === "audio_finished";
+    const pos = has ? this.audio.position() : finished ? dur : this.audioAt(l, clip);
+    const to = name.startsWith("seekto:") ? Number(name.slice(7)) : name.startsWith("seek:") ? pos + Number(name.slice(5)) : null;
+    if (to != null && !clip.src) return "Moving around works only in recordings.";
+    if (to != null && to >= dur) return `The recording is only ${Math.round(dur / 60)} minutes long.`;
+    const start = to != null ? Math.max(0, to) : finished ? 0 : pos;
+    if (this.route.id !== "audio_player") this.go("audio_player");
+    if (!has) {
+      if (!this.audio.play(clip, () => this.onAudioFinished(), () => this.onAudioFailed(), start)) { this.onAudioFailed(); return "Audio is not playing."; }
+    } else {
+      if (to != null) this.audio.seekTo(start);
+      if (!this.audio.isPlaying()) this.audio.toggle();
+    }
+    return "";
   }
 
   /** Content Studio's audio for a chapter: its recording. */
@@ -1038,11 +1076,11 @@ export class Engine {
         switch (c) {
           case "toggle":
             if (!this.audio.hasMedia()) {
-              const ok = !!clip && this.audio.play(clip, () => this.onAudioFinished(), () => this.onAudioFailed());
+              const ok = !!clip && this.audio.play(clip, () => this.onAudioFinished(), () => this.onAudioFailed(), this.audioAt(l, clip));
               if (!ok) { this.onAudioFailed(); return "Audio is not playing."; }
             } else this.audio.toggle();
             return "";
-          case "replay": this.audio.replay(); return "";
+          case "replay": return this.audioGo("seekto:0"); // also works before it has started, or after a class that stopped partway
           case "version": {
             this.audio.stop();
             const i = list.findIndex((a) => clip && a.id === clip.id);
@@ -1065,7 +1103,7 @@ export class Engine {
         break;
       case "audio_finished":
         if (c === "back") this.go("teach_step");
-        if (c === "replay") { this.go("audio_player"); this.audio.replay(); }
+        if (c === "replay") return this.audioGo("seekto:0");
         break;
       case "end_coverage": {
         const s = this.session();

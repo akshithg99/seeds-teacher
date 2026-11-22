@@ -66,6 +66,9 @@ export function match(text, step, pending) {
 
   for (const [name, phrases] of Object.entries(COMMANDS)) if (phrases.includes(t)) return { type: "command", name };
 
+  // the audio screens: play, pause and moving around in a recording, before the buttons' own words ("play" is a toggle)
+  if (step.audio) { const a = audioCommand(t); if (a) return { type: "command", name: a }; }
+
   // TIK tabs: "activities tab", "open materials", "summary"
   if (step.tik) { const i = TikTabs.parse(t); if (i !== null) return { type: "command", name: `tab:${i}` }; }
 
@@ -104,6 +107,38 @@ export function match(text, step, pending) {
     if (best[1] >= 0.8 && best[1] - second >= 0.15) return { type: "choose", choiceId: best[0].id };
   }
   return { type: "none" };
+}
+
+const ones = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const tens = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+/** "30", "thirty", "twenty five", "a" -> a number, else NaN. */
+function amount(w) {
+  if (/^\d+$/.test(w)) return parseInt(w, 10);
+  if (w === "a" || w === "an") return 1;
+  const [a, b] = w.split(" ");
+  if (b === undefined) return ones.includes(a) ? ones.indexOf(a) : tens[a] ?? NaN;
+  return tens[a] && ones.indexOf(b) > 0 && ones.indexOf(b) < 10 ? tens[a] + ones.indexOf(b) : NaN;
+}
+
+/** Spoken audio controls -> "audio_pause", "audio_play", "seek:<±seconds>" or "seekto:<seconds>"; null when it is not one. */
+export function audioCommand(t) {
+  t = t.replace(/^please /, "").replace(/ please$/, "").replace(/\bhalf a minute\b/, "30 seconds");
+  if (/^(pause|pause it|pause the audio|pause the recording|hold on|wait)$/.test(t)) return "audio_pause";
+  if (/^(play|play it|resume|continue|carry on|play the audio|resume the audio|keep playing)$/.test(t)) return "audio_play";
+  if (/^(from the (beginning|start)|start (again|over)|restart|play from the (beginning|start))$/.test(t)) return "seekto:0";
+  const unit = (u) => (u.startsWith("min") ? 60 : 1);
+  let m = t.match(/^(?:go |skip |jump |move )?(back|backward|backwards|rewind|forward|forwards|ahead|fast forward)(?: by)? ([a-z0-9]+(?: [a-z]+)?) (seconds?|secs?|minutes?|mins?)$/);
+  if (m) { const n = amount(m[2]); if (!isNaN(n)) return `seek:${/back|rewind/.test(m[1]) ? -n * unit(m[3]) : n * unit(m[3])}`; }
+  m = t.match(/^([a-z0-9]+(?: [a-z]+)?) (seconds?|secs?|minutes?|mins?) (back|backward|forward|ahead)$/);
+  if (m) { const n = amount(m[1]); if (!isNaN(n)) return `seek:${m[3].startsWith("back") ? -n * unit(m[2]) : n * unit(m[2])}`; }
+  m = t.match(/^skip ([a-z0-9]+(?: [a-z]+)?) (seconds?|secs?|minutes?|mins?)$/);
+  if (m) { const n = amount(m[1]); if (!isNaN(n)) return `seek:${n * unit(m[2])}`; }
+  if (/^(rewind|skip back|go back a bit)$/.test(t)) return "seek:-30";
+  if (/^(skip ahead|fast forward|skip forward)$/.test(t)) return "seek:30";
+  m = t.match(/^(?:(?:go|jump|skip|move|start|play|take me)(?: to| from| at)? )?(?:minute|min) ([a-z0-9]+(?: [a-z]+)?)$/)
+    || t.match(/^(?:go|jump|skip|move|start|play|take me)(?: to| from| at)? ([a-z0-9]+(?: [a-z]+)?) (?:minutes?|mins?)(?: mark)?$/);
+  if (m) { const n = amount(m[1]); if (!isNaN(n)) return `seekto:${n * 60}`; }
+  return null;
 }
 
 const classWords = { five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10 };

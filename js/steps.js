@@ -5,6 +5,8 @@ import { TikTabs } from "./tiktabs.js";
 
 const NOT_APPROVED = "Created by SEEDS PROJECT-B — not yet approved";
 const PLAN_STAGES = ["Lesson", "TIK", "Questions", "Audio", "Ready"];
+// what a teacher can say about a recording; the voice button pauses the audio first
+const AUDIO_HELP = "While the audio plays, press the voice button and say: pause, play, back 30 seconds, forward 1 minute, jump to minute 20, or from the beginning.";
 const PERIOD_MINUTES = 40; // shortcut: a fixed period length, until the teacher's timetable gives the real one
 const planProgress = (stage) => ({ labels: PLAN_STAGES, current: stage });
 const numberWord = (n) => ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] || String(n);
@@ -372,13 +374,16 @@ export function buildStep(e) {
     case "audio_player": {
       const list = e.approvedAudio(l);
       const clip = list.find((a) => a.id === d.audioClipId) || list[0];
-      const playing = e.audio.isPlaying();
+      const playing = e.audio.isPlaying(), at = e.audio.hasMedia() ? 0 : e.audioAt(l, clip);
+      const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
       return makeStep("audio_player", Flow.TEACH, "Play audio", playing ? "Playing. Pause, or back to the lesson?" : "Play the audio?", [
         choice("toggle", playing ? "Pause" : "Play", { words: ["play", "pause", "resume"] }),
         choice("not_working", "Audio not working?", { words: ["not working", "audio not working", "no sound"] }),
         list.length > 1 ? choice("version", "Play a different version", { words: ["different version", "other version"] }) : choice("replay", "Replay", { words: ["replay", "again", "from the start"] }),
         choice("back", "Back to lesson", { words: ["back", "back to lesson"] }),
-      ], { inClass: true, known: clip ? [["Audio", `${clip.name} · ${clip.provenance}`]] : [],
+      ], { inClass: true, audio: true, known: clip ? [["Audio", `${clip.name} · ${clip.provenance}`], ...(at ? [["Carries on from", `${mmss(at)}, where you stopped`]] : [])] : [],
+        announce: at ? `It carries on from ${Math.floor(at / 60)} minutes in, where you stopped last time. To start again, say from the beginning.` : null,
+        help: AUDIO_HELP,
         sections: [section("Speaker", ["Audio plays from this device through the classroom speaker. Connect the speaker before class and set the volume high."])] });
     }
 
@@ -391,7 +396,7 @@ export function buildStep(e) {
       const sets = l ? l.questionSets.filter((q) => q.approved && q.discussion.length) : [];
       return makeStep("audio_finished", Flow.TEACH, "Audio finished", "Back to the lesson, or replay?",
         [choice("back", "Back to lesson", { words: ["back", "lesson"] }), choice("replay", "Replay", { words: ["replay"] })],
-        { announce: "Audio finished." + (sets.length ? " Discussion questions are on screen." : ""), inClass: true,
+        { announce: "Audio finished." + (sets.length ? " Discussion questions are on screen." : ""), inClass: true, audio: true, help: AUDIO_HELP,
           sections: sets.map((q) => section(`Discussion: ${q.title}`, q.discussion, { lang: q.lang })) });
     }
 

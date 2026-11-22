@@ -207,3 +207,20 @@ test("while on, the agent stops listening when lesson audio starts, and picks up
   out.done();
   assert.equal(v.state, "LISTENING");
 });
+
+test("while lesson audio plays, the Speak button pauses it and listens; a command that plays it again is not talked over", async () => {
+  let playing = false;
+  v.player.isPlaying = () => playing;
+  v.player.pauseForAgent = () => { playing = false; };
+  v.onVoiceButton(); out.done();
+  playing = true; v.sleep(); // the audio started: the agent waits, still on
+  v.onVoiceButton();
+  assert.ok(v.on && !playing, "paused, not turned off");
+  assert.equal(out.said.at(-1), "Yes, how can I help?");
+  out.done();
+  const n = out.said.length;
+  e.command = () => { playing = true; return ""; }; // e.g. "back 30 seconds" plays it again
+  await v.handle("repeat");
+  assert.equal(out.said.length, n);
+  assert.ok(v.on && v.state === "SLEEP");
+});

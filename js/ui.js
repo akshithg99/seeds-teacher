@@ -50,7 +50,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   const mainEl = h("main", { class: "shell", id: "main" });
   const fbEl = h("div", { class: "feedback", role: "status", "aria-live": "polite" });
   const dlg = h("dialog", { class: "settings", "aria-labelledby": "settings-title" });
-  app.append(voiceEl, topEl, navEl, mainEl, fbEl, dlg);
+  const pdlg = h("dialog", { class: "settings player", "aria-labelledby": "player-title" });
+  app.append(voiceEl, topEl, navEl, mainEl, fbEl, dlg, pdlg);
   // The voice and feedback bars sit over the page; pad the page by their real height so they never hide content.
   const fit = () => {
     const root = document.documentElement.style;
@@ -68,6 +69,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     if (!c.enabled) { say(c.whyDisabled || "That is not available right now.", true); return; }
     const res = await engine.choose(c.id, Source.BUTTON);
     say(res, c.tier === Tier.READ);
+    if (c.id === "toggle" && engine.step.id === "audio_player" && player.isPlaying() && !pdlg.open) openPlayer(); // the controls pop up when it starts
   }
   async function onConfirm() { const p = engine.pending; if (!p) return; const res = await engine.choose(p.choice.id, Source.BUTTON, true); say(res); }
   function onCancel() { say(engine.cancelPending()); }
@@ -104,7 +106,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   function renderVoice() {
     const st = voice.state, on = voice.on;
     // one press turns the agent on; it keeps listening until the next press turns it off
-    const label = !on ? "Off. Press to turn on" : { LISTENING: "On, listening. Press to turn off", THINKING: "On, working. Press to turn off", SPEAKING: "On, speaking. Press to turn off" }[st] || "On. Press to turn off";
+    const label = !on ? "Off. Press to turn on" : st === "SLEEP" && player.isPlaying() ? "On, waiting for the audio. Press to pause it and speak" : { LISTENING: "On, listening. Press to turn off", THINKING: "On, working. Press to turn off", SPEAKING: "On, speaking. Press to turn off" }[st] || "On. Press to turn off";
     const btn = h("button", { class: "mic", type: "button", "data-state": on && st === "SLEEP" ? "LISTENING" : st, "aria-pressed": String(on), "aria-label": `Voice guide: ${label}`, onclick: () => voice.onVoiceButton() },
       svg(!on ? ICON.mic : st === "THINKING" ? ICON.dots : ICON.stop));
     const lines = [];
@@ -232,6 +234,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
       "aria-describedby": c.enabled ? null : `why-${i}`,
     }, h("span", {}, h("span", { class: "num", "aria-hidden": "true" }, i + 1), c.label, !c.enabled ? h("span", { class: "why", id: `why-${i}` }, c.whyDisabled) : null, c.suggested && s.suggestion && s.suggestion.choiceId === c.id ? h("span", { class: "why" }, `Suggested ${s.suggestion.reason}.`) : null),
       h("span", { class: "chev", "aria-hidden": "true" }, "›"))))));
+    if (s.id === "audio_player") kids.push(h("div", { class: "row" }, h("button", { class: "btn", type: "button", "data-key": "open-player", onclick: openPlayer }, "Open player controls")));
     if (s.freeSpeech) {
       kids.push(h("div", { class: "free" },
         h("label", { for: "free-text" }, "Or type it"),
@@ -273,6 +276,48 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   }
 
   // ------------------------------------------------------------------ settings
+  // ------------------------------------------------------------------ audio player popup
+  const SPEEDS = [0.5, 1, 1.25, 1.5, 2];
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  let ptimer = null;
+  pdlg.addEventListener("close", () => { clearInterval(ptimer); ptimer = null; });
+  function openPlayer() {
+    const clip = engine.audioClip();
+    if (!clip) return;
+    let dragging = false;
+    const time = h("p", { class: "ptime", "aria-hidden": "true" });
+    const bar = h("input", { type: "range", class: "range", id: "p-pos", min: "0", step: "1", "aria-label": "Position in the recording",
+      onpointerdown: () => { dragging = true; }, onchange: (ev) => { dragging = false; player.seekTo(+ev.target.value); update(); } });
+    const back = h("button", { class: "btn", type: "button", "aria-label": "Back 30 seconds", onclick: () => { player.seekBy(-30); update(); } }, "−30 s");
+    const fwd = h("button", { class: "btn", type: "button", "aria-label": "Forward 30 seconds", onclick: () => { player.seekBy(30); update(); } }, "+30 s");
+    const playBtn = h("button", { class: "btn yes pplay", type: "button", onclick: () => { if (player.hasMedia()) player.toggle(); else engine.command("audio_play", Source.BUTTON); update(); } });
+    const speeds = SPEEDS.map((r) => h("button", { class: "btn", type: "button", onclick: () => { player.setRate(r); engine.setPref("audioRate", r); update(); } }, `${r}×`));
+    function update() {
+      const has = player.hasMedia(), pos = has ? player.position() : engine.audioAt(engine.lesson(), clip), dur = (has && player.duration()) || clip.durationSec;
+      time.textContent = `${mmss(pos)} / ${mmss(dur)}`;
+      bar.max = String(Math.floor(dur));
+      if (!dragging) bar.value = String(Math.floor(pos));
+      bar.setAttribute("aria-valuetext", `${Math.floor(pos / 60)} minutes ${Math.floor(pos % 60)} seconds of ${Math.round(dur / 60)} minutes`);
+      bar.disabled = !player.canSeek();
+      for (const b of [back, fwd]) b.setAttribute("aria-disabled", player.canSeek() ? "false" : "true");
+      playBtn.textContent = player.isPlaying() ? "Pause" : "Play";
+      speeds.forEach((b, i) => b.setAttribute("aria-pressed", String(player.rate === SPEEDS[i])));
+    }
+    pdlg.replaceChildren(
+      h("div", { class: "head" }, h("h2", { id: "player-title" }, "Audio player"), h("button", { class: "btn", type: "button", onclick: () => pdlg.close() }, "Close")),
+      h("div", { class: "body" },
+        h("p", {}, clip.name),
+        time, bar,
+        h("div", { class: "prow" }, back, playBtn, fwd),
+        h("h3", { id: "speed-title" }, "Speed"),
+        h("div", { class: "prow", role: "group", "aria-labelledby": "speed-title" }, speeds),
+        h("p", { class: "small" }, "Moving around works once the recording is playing. Closing this keeps the audio playing."),
+      ));
+    update();
+    clearInterval(ptimer); ptimer = setInterval(update, 500);
+    if (!pdlg.open) pdlg.showModal();
+  }
+
   function openSettings() {
     const st = engine.st;
     const keyIn = h("input", { type: "password", id: "claude-key", autocomplete: "off", spellcheck: "false", placeholder: claude.available ? "A key is saved on this device" : "sk-ant-…" });

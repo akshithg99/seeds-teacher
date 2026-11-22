@@ -211,6 +211,69 @@ test("audio that cannot play falls back to teacher-led in one step (FR-38)", asy
   assert.equal(id(), "teach_step");
 });
 
+test("in class, voice moves around the recording, and the next class carries on where it stopped", async () => {
+  // a recording player: pausing or stopping reports where it was, as the real one does
+  const rec = { ...noAudio, media: false, playing: false, pos: 0, at: null, clip: null,
+    play(clip, _f, _x, at = 0) { this.clip = clip; this.media = this.playing = true; this.pos = this.at = at; return true; },
+    toggle() { this.playing = !this.playing; if (!this.playing) e.saveAudioAt(this.clip, this.pos); },
+    stop() { if (this.media) e.saveAudioAt(this.clip, this.pos); this.media = this.playing = false; },
+    isPlaying() { return this.playing; }, hasMedia() { return this.media; }, position() { return this.pos; }, seekTo(s) { this.pos = s; } };
+  e.audio = rec;
+  const say = (t) => { const r = match(t, e.step, null); assert.equal(r.type, "command", t); return e.command(r.name, Source.VOICE); };
+  e.setClassLang(7, "English");
+  await go("plan", "c7", "Maths", "7m-decimals", "yes", "tik", "use_as_is");
+  await e.choose("approve", Source.BUTTON, true);
+  await e.choose("use", Source.BUTTON);
+  await go("open", "start", "audio");
+  await go("toggle");
+  assert.equal(rec.at, 0);
+  rec.pos = 1500;
+  assert.equal(say("pause"), "Paused.");
+  assert.equal(rec.playing, false);
+  assert.equal(say("back 30 seconds"), "");
+  assert.ok(rec.playing && rec.pos === 1470);
+  say("jump to minute 20");
+  assert.equal(rec.pos, 1200);
+  const dur = e.audioClip().durationSec;
+  assert.equal(say("go to minute 500"), `The recording is only ${Math.round(dur / 60)} minutes long.`);
+  assert.equal(rec.pos, 1200);
+  await go("back"); // stopping saves the place
+  // the next class: the recording carries on from there
+  await go("audio");
+  assert.deepEqual(e.step.known.at(-1), ["Carries on from", "20:00, where you stopped"]);
+  assert.match(e.step.announce, /carries on from 20 minutes in/);
+  await go("toggle");
+  assert.equal(rec.at, 1200);
+  // it ends: the place is cleared, and "back 30 seconds" plays the last half minute again
+  e.saveAudioAt(rec.clip, 0); rec.media = rec.playing = false; e.onAudioFinished();
+  assert.equal(id(), "audio_finished");
+  assert.equal(e.lesson().audioAt[rec.clip.id], 0); // finished: the next class starts from the beginning
+  say("back 30 seconds");
+  assert.equal(id(), "audio_player");
+  assert.equal(rec.at, dur - 30);
+});
+
+test("spoken audio controls", () => {
+  const s = { ...e.step, audio: true };
+  const m = (t) => { const r = match(t, s, null); return r.type === "command" ? r.name : r.type; };
+  assert.equal(m("back 30 seconds"), "seek:-30");
+  assert.equal(m("go back thirty seconds"), "seek:-30");
+  assert.equal(m("rewind"), "seek:-30");
+  assert.equal(m("forward 2 minutes"), "seek:120");
+  assert.equal(m("skip ahead one minute"), "seek:60");
+  assert.equal(m("skip a minute"), "seek:60");
+  assert.equal(m("half a minute back"), "seek:-30");
+  assert.equal(m("jump to minute 20"), "seekto:1200");
+  assert.equal(m("go to 20 minutes"), "seekto:1200");
+  assert.equal(m("minute twenty five"), "seekto:1500");
+  assert.equal(m("from the beginning"), "seekto:0");
+  assert.equal(m("pause"), "audio_pause");
+  assert.equal(m("resume"), "audio_play");
+  assert.equal(m("back"), "back"); // still the Back command
+  assert.equal(m("back banana seconds"), "none");
+  assert.notEqual(match("back 30 seconds", e.step, null).name, "seek:-30"); // only on the audio screens
+});
+
 // ---------------------------------------------------------------- offline speech understanding
 
 test("misheard option words still match", async () => {

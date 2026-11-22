@@ -239,9 +239,10 @@ export class BargeIn {
  * so pause and resume work on every browser. Returns false from play() when there is no voice for the language.
  */
 export class LessonPlayer {
-  constructor() { this.clip = null; this.parts = []; this.i = 0; this.playing = false; this.token = 0; this.onFinished = null; this.onFailed = null; this.onChange = () => {}; }
-  play(clip, onFinished, onFailed) {
-    if (clip.src) return this.playFile(clip, onFinished, onFailed);
+  constructor() { this.clip = null; this.parts = []; this.i = 0; this.playing = false; this.token = 0; this.onFinished = null; this.onFailed = null; this.onChange = () => {}; this.onPosition = () => {}; this.rate = 1; }
+  /** `at`: seconds into a recording to start from (where the last class stopped). */
+  play(clip, onFinished, onFailed, at = 0) {
+    if (clip.src) return this.playFile(clip, onFinished, onFailed, at);
     const s = synth();
     const v = voiceFor(clip.lang);
     if (!s || (clip.lang && clip.lang !== "English" && !v)) return false;
@@ -268,11 +269,13 @@ export class LessonPlayer {
     s.speak(u);
   }
   /** A recording from Content Studio (clip.src): played as a file, so pause and resume keep the place. */
-  playFile(clip, onFinished, onFailed) {
+  playFile(clip, onFinished, onFailed, at = 0) {
     this.stop();
     const a = new Audio(clip.src);
+    a.defaultPlaybackRate = a.playbackRate = this.rate;
+    if (at > 0) a.currentTime = at; // before loading, this sets where playback starts
     const fail = () => { if (this.el !== a) return; this.stop(); if (onFailed) onFailed(); };
-    a.onended = () => { if (this.el !== a) return; this.el = null; this.playing = false; this.clip = null; this.onChange(); if (onFinished) onFinished(); };
+    a.onended = () => { if (this.el !== a) return; this.el = null; this.playing = false; this.clip = null; this.onPosition(clip, 0); this.onChange(); if (onFinished) onFinished(); };
     a.onerror = fail;
     this.el = a; this.clip = clip; this.playing = true;
     a.play().catch(fail);
@@ -281,7 +284,7 @@ export class LessonPlayer {
   }
   toggle() {
     if (!this.clip) return;
-    if (this.el) { if (this.playing) this.el.pause(); else this.el.play().catch(() => {}); this.playing = !this.playing; this.onChange(); return; }
+    if (this.el) { if (this.playing) { this.el.pause(); this.onPosition(this.clip, this.el.currentTime); } else this.el.play().catch(() => {}); this.playing = !this.playing; this.onChange(); return; }
     if (this.playing) { this.playing = false; this.token++; synth().cancel(); } else { this.playing = true; this.next(); }
     this.onChange();
   }
@@ -291,13 +294,20 @@ export class LessonPlayer {
     this.token++; synth().cancel(); this.i = 0; this.playing = true; this.next(); this.onChange();
   }
   stop() {
-    const had = !!this.clip; this.playing = false; this.clip = null; this.token++;
-    if (this.el) { const a = this.el; this.el = null; a.pause(); a.removeAttribute("src"); a.load(); }
+    const had = !!this.clip, c = this.clip; this.playing = false; this.clip = null; this.token++;
+    if (this.el) { const a = this.el; this.el = null; a.pause(); this.onPosition(c, a.currentTime); a.removeAttribute("src"); a.load(); }
     else if (had && synth()) synth().cancel();
     if (had) this.onChange();
   }
   isPlaying() { return this.playing; }
   hasMedia() { return !!this.clip; }
+  // moving around works in recordings only: a script read by the device voice has no timeline
+  canSeek() { return !!this.el; }
+  position() { return this.el ? this.el.currentTime : 0; }
+  duration() { return this.el && isFinite(this.el.duration) ? this.el.duration : (this.clip && this.clip.durationSec) || 0; }
+  seekTo(sec) { if (!this.el) return; const d = this.duration(); this.el.currentTime = Math.max(0, d ? Math.min(sec, d - 1) : sec); this.onChange(); }
+  seekBy(sec) { this.seekTo(this.position() + sec); }
+  setRate(r) { this.rate = r; if (this.el) this.el.playbackRate = r; }
   /** The agent was woken: pause the lesson so the two never talk over each other (FR-61). */
   pauseForAgent() { if (this.playing) this.toggle(); }
 }
@@ -336,10 +346,11 @@ export class VoiceOrchestrator {
   /**
    * The voice button or the laptop shortcut is an on/off switch. One press turns the agent on: it listens, answers,
    * and listens again, question after question. The next press turns it off at once, whatever it is doing.
+   * While lesson audio plays the agent waits, so a press then pauses the audio and listens ("back 30 seconds").
    */
   onVoiceButton() {
     this.earcons.unlock();
-    if (this.on) this.turnOff(); else this.wake();
+    if (this.on && !this.player.isPlaying()) this.turnOff(); else this.wake();
   }
 
   /** Off: stop speaking and listening at once. A request still being worked on is cancelled, and nothing from it is applied (FR-99). */
@@ -442,6 +453,8 @@ export class VoiceOrchestrator {
         this.misses = 0;
         this.set({ turnInfo: `Heard by the ${this.input.name} · understood on this device (no AI call)` });
         e.log("voice_turn", null, Source.VOICE, `fast path, ${secs.toFixed(1)} s of speech`);
+        // the lesson audio playing again is the answer: never talk over it; the agent picks up when it ends
+        if (this.player.isPlaying()) { this.earcons.stopWorking(); this.sleep(); return; }
         this.speak(reply, true);
         return;
       }

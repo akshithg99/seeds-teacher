@@ -206,6 +206,11 @@ dialog.settings::backdrop { background: rgb(0 0 0 / .55); }
 .settings select { min-height: 48px; padding: 6px 10px; border-radius: 10px; border: 2px solid var(--line-strong); background: var(--bg); }
 .langrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
 .range { width: 100%; min-height: 40px; accent-color: var(--accent); }
+.player .ptime { font-size: 1.6rem; font-variant-numeric: tabular-nums; margin: 12px 0 0; }
+.player .prow { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.player .prow .btn { min-width: 64px; min-height: 48px; }
+.player .pplay { min-width: 120px; }
+.player .btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 .keyrow { display: flex; gap: 8px; flex-wrap: wrap; }
 .keyrow input { flex: 1 1 220px; min-width: 0; min-height: 52px; padding: 8px 12px; border-radius: 12px; border: 2px solid var(--line-strong); background: var(--bg); }
 .small { font-size: .95rem; color: var(--muted); }

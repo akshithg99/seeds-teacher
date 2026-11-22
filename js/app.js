@@ -31,6 +31,8 @@ const output = new SpeechOut();
 output.rate = store.state.speechRate || 1;
 const voice = new VoiceOrchestrator(engine, brain, new SpeechIn(), output, new Earcons(), player, new BargeIn());
 player.onChange = () => engine.refresh();
+player.onPosition = (clip, sec) => engine.saveAudioAt(clip, sec);
+player.rate = store.state.audioRate || 1;
 
 mountUI({
   engine, voice, claude, player, version,
