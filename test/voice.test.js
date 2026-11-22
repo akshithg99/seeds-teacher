@@ -154,3 +154,40 @@ test("Speech: a voice the phone lacks is retried in the phone's default voice, a
     assert.match(v.turnInfo, /didn't play my reply \(synthesis-failed\)/);
   } finally { delete globalThis.window; delete globalThis.SpeechSynthesisUtterance; }
 });
+
+test("the Speak button turns the agent on; it keeps listening and answering until the button turns it off", async () => {
+  const listens = () => v.state === "LISTENING";
+  v.onVoiceButton(); // on
+  assert.ok(v.on);
+  assert.equal(out.said.at(-1), "Hi, how can I help?");
+  out.done();
+  assert.ok(listens(), "listens after the greeting");
+  // silence is not a miss: it just keeps listening, without asking again
+  const before = out.said.length;
+  await new Promise((r) => setTimeout(r, 300)); // the recogniser starts just after the tone
+  v.input.L.onNoSpeech();
+  assert.ok(listens());
+  assert.equal(out.said.length, before);
+  // one question after another, each answered, and it listens again every time
+  await v.handle("plan"); out.done();
+  assert.ok(listens());
+  await v.handle("class six"); out.done();
+  assert.ok(listens());
+  assert.equal(e.step.id, "pick_subject");
+  // three misses show the buttons, but it is still on and listening
+  for (let k = 0; k < 3; k++) { await v.handle("banana"); out.done(); }
+  assert.ok(v.showOptions && v.on && listens());
+  // a tap on a button while it is on: the action is done and it keeps listening
+  v.afterButton(await e.choose("Science", Source.BUTTON), false);
+  assert.ok(listens());
+  // the next press turns it off, whatever it is doing
+  v.onVoiceButton();
+  assert.equal(v.on, false);
+  assert.equal(v.state, "SLEEP");
+  v.afterButton(await e.choose("home", Source.BUTTON), false);
+  assert.equal(v.state, "SLEEP"); // off stays off
+  // saying "stop" also turns it off
+  v.onVoiceButton(); out.done();
+  await v.handle("stop");
+  assert.equal(v.on, false);
+});

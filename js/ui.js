@@ -102,15 +102,16 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
 
   // ------------------------------------------------------------------ voice bar
   function renderVoice() {
-    const st = voice.state;
-    const label = { SLEEP: "Press to speak", LISTENING: "Listening… press to finish", THINKING: "Working… press to cancel", SPEAKING: "Speaking… press to interrupt" }[st];
-    const btn = h("button", { class: "mic", type: "button", "data-state": st, "aria-label": `Voice guide: ${label}`, onclick: () => voice.onVoiceButton() },
-      svg(st === "SPEAKING" || st === "LISTENING" ? ICON.stop : st === "THINKING" ? ICON.dots : ICON.mic));
+    const st = voice.state, on = voice.on;
+    // one press turns the agent on; it keeps listening until the next press turns it off
+    const label = !on ? "Off. Press to turn on" : { LISTENING: "On, listening. Press to turn off", THINKING: "On, working. Press to turn off", SPEAKING: "On, speaking. Press to turn off" }[st] || "On. Press to turn off";
+    const btn = h("button", { class: "mic", type: "button", "data-state": on && st === "SLEEP" ? "LISTENING" : st, "aria-pressed": String(on), "aria-label": `Voice guide: ${label}`, onclick: () => voice.onVoiceButton() },
+      svg(!on ? ICON.mic : st === "THINKING" ? ICON.dots : ICON.stop));
     const lines = [];
     if (st === "LISTENING" || (voice.heard && st !== "SLEEP")) lines.push(h("div", { class: "vline" }, voice.heard ? `You: ${voice.heard}` : "Say an option, or what you want to do."));
     if (voice.said && (st === "SPEAKING" || st === "SLEEP")) lines.push(h("div", { class: "vline" }, `SEEDS: ${voice.said}`));
-    if (!lines.length && matchMedia("(pointer: fine)").matches) lines.push(h("div", { class: "vhint" }, `Shortcut: ${SHORTCUT_TEXT}. Esc stops me.`));
-    const short = { SLEEP: "Speak", LISTENING: "Listening", THINKING: "Working", SPEAKING: "Speaking" }[st];
+    if (!lines.length && matchMedia("(pointer: fine)").matches) lines.push(h("div", { class: "vhint" }, `Shortcut: ${SHORTCUT_TEXT} turns me on and off. Esc turns me off.`));
+    const short = !on ? "Speak" : { LISTENING: "Listening", THINKING: "Working", SPEAKING: "Speaking" }[st] || "On";
     const signedIn = !!engine.st.signedInPhone, flow = signedIn ? engine.step.flow : null;
     const tab = (label, icon, onclick, current) => h("button", { class: "vtab", type: "button", "aria-current": current ? "page" : null, onclick }, svg(icon), h("span", {}, label));
     // the mic stays first in focus order (FR-90); the layout draws it in the middle of the four tabs
@@ -380,7 +381,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     if (ev.ctrlKey && ev.shiftKey && (ev.code === "Space" || ev.key === " ")) { ev.preventDefault(); voice.onVoiceButton(); return; }
     const typing = ev.target.closest && ev.target.closest("input, textarea, [contenteditable]");
     if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && ev.key.toLowerCase() === "z" && !typing && !dlg.open && engine.undoPoint) { ev.preventDefault(); onUndo(); return; }
-    if (ev.key === "Escape") { if (voice.state !== "SLEEP") { ev.preventDefault(); voice.stopAll(); } return; }
+    if (ev.key === "Escape") { if (voice.on || voice.state !== "SLEEP") { ev.preventDefault(); voice.stopAll(); } return; }
     if (["Shift", "Control", "Alt", "Meta", "Tab"].includes(ev.key)) return;
     if (voice.state === "SPEAKING") voice.quietForTap();
     if (voice.state === "THINKING" && !dlg.open) voice.cancelTurn();

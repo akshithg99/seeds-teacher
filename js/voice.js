@@ -317,7 +317,7 @@ export class VoiceOrchestrator {
   constructor(engine, brain, input, output, earcons, player, vad) {
     Object.assign(this, { engine, brain, input, output, earcons, player, vad });
     this.state = "SLEEP"; this.heard = ""; this.said = ""; this.showOptions = false; this.turnInfo = "";
-    this.awake = false; this.interrupted = false; this.misses = 0; this.missStep = ""; this.forceListen = false;
+    this.awake = false; this.on = false; this.interrupted = false; this.misses = 0; this.missStep = ""; this.forceListen = false;
     this.abort = null; this.listeners = new Set();
     engine.subscribe((src) => {
       // say what it is doing while a voice request is worked on: "Preparing your lesson plan."
@@ -332,16 +332,17 @@ export class VoiceOrchestrator {
   emit() { this.listeners.forEach((f) => f()); }
   set(patch) { Object.assign(this, patch); this.emit(); }
 
-  /** The voice button or the laptop shortcut. One press starts a turn (FR-90). */
+  /**
+   * The voice button or the laptop shortcut is an on/off switch. One press turns the agent on: it listens, answers,
+   * and listens again, question after question. The next press turns it off at once, whatever it is doing.
+   */
   onVoiceButton() {
     this.earcons.unlock();
-    switch (this.state) {
-      case "SPEAKING": this.interrupt(); break; // FR-93: stops speech at once, then listens
-      case "THINKING": this.cancelTurn(); break; // FR-99
-      case "LISTENING": this.input.stop(); break; // end the listening window early
-      default: this.wake();
-    }
+    if (this.on) this.turnOff(); else this.wake();
   }
+
+  /** Off: stop speaking and listening at once. A request still being worked on is cancelled, and nothing from it is applied (FR-99). */
+  turnOff() { this.on = false; this.offPressed = true; if (this.abort) this.abort.abort(); this.output.stop(); this.sleep(); }
 
   wake() {
     if (!this.engine.st.signedInPhone) {
@@ -352,7 +353,7 @@ export class VoiceOrchestrator {
     if (!this.input.available) { this.speak("This browser can't listen. Use Chrome, Edge or Safari for the voice guide. The buttons work everywhere.", false); return; }
     this.player.pauseForAgent();
     this.brain.newConversation();
-    this.awake = true; this.misses = 0; this.voiceSession = true;
+    this.awake = true; this.on = true; this.misses = 0; this.voiceSession = true;
     // Safari only lets the recogniser start inside the tap itself, so there it listens at once (the tone is the greeting)
     if (this.input.needsTap) { this.listen(true); return; }
     this.forceListen = true;
@@ -360,14 +361,14 @@ export class VoiceOrchestrator {
     this.greeted = true;
   }
 
-  /** Any tap on the screen stops the agent's speech at once (FR-93), without starting to listen. */
+  /** Any tap on the screen stops the agent's speech at once (FR-93). While the agent is on, it goes back to listening. */
   quietForTap() {
-    if (this.state === "SPEAKING" || this.state === "LISTENING") {
+    if (this.state === "SPEAKING") {
       this.interrupted = true;
       if (this.abort) this.abort.abort();
-      this.output.stop(); this.input.cancel();
-      this.sleep();
-    }
+      this.output.stop();
+      if (this.on && this.canListen()) this.listen(false); else this.sleep();
+    } else if (this.state === "LISTENING" && !this.on) { this.input.cancel(); this.sleep(); }
   }
 
   /**
@@ -378,29 +379,33 @@ export class VoiceOrchestrator {
     this.voiceSession = false;
     if (this.player.isPlaying()) return; // never talk over lesson audio (FR-61)
     if (read && result) this.speak(result, false);
+    else if (this.on && this.state === "SLEEP" && this.canListen()) this.listen(false); // still on: keep listening
   }
 
   sleep() { this.awake = false; this.vad.stop(); this.input.cancel(); this.earcons.stopWorking(); this.set({ state: "SLEEP" }); }
-  stopAll() { if (this.abort) this.abort.abort(); this.output.stop(); this.sleep(); }
+  stopAll() { this.on = false; if (this.abort) this.abort.abort(); this.output.stop(); this.sleep(); }
+  /** Listening is possible: signed in, a recogniser, and no lesson audio playing (the agent never listens over it). */
+  canListen() { return !!this.engine.st.signedInPhone && this.input.available && !this.player.isPlaying(); }
 
   // ------------------------------------------------------------------ turn
 
-  listen(fromGesture = false) {
+  listen(fromGesture = false, quiet = false) {
     this.vad.stop();
     const step = this.engine.step;
     if (step.id !== this.missStep) { this.misses = 0; this.missStep = step.id; }
     this.set({ state: "LISTENING", heard: "" });
-    this.earcons.listening();
+    if (!quiet) this.earcons.listening();
     const long = !!step.freeSpeech;
     const go = () => {
       if (this.state !== "LISTENING") return;
       this.input.listen(hints(step), long ? 60000 : 15000, long, {
         onPartial: (t) => this.set({ heard: t }),
         onFinal: (t, secs) => { this.earcons.endListening(); this.set({ heard: t }); this.handle(t, secs); },
-        onNoSpeech: () => { this.earcons.endListening(); this.onMiss(true); },
+        // while the agent is on, silence just means the teacher has nothing to say yet: keep listening, without a tone
+        onNoSpeech: () => { if (this.on) { this.listen(false, true); return; } this.earcons.endListening(); this.onMiss(true); },
         onError: (msg, quiet) => {
           this.earcons.endListening();
-          this.awake = false;
+          this.awake = false; this.on = false; // the microphone can't be used: the agent turns off
           this.set({ turnInfo: "Voice: " + msg });
           if (quiet) this.sleep(); else this.speak(msg, false);
         },
@@ -418,13 +423,13 @@ export class VoiceOrchestrator {
   async handle(text, secs = 0) {
     this.set({ state: "THINKING" });
     this.earcons.startWorking();
-    this.interrupted = false;
+    this.interrupted = false; this.offPressed = false;
     const e = this.engine;
     try {
       const intent = match(text, e.step, e.pending);
       let reply = null;
       if (intent.type === "command") {
-        if (intent.name === "stop") { this.earcons.stopWorking(); this.sleep(); return; }
+        if (intent.name === "stop") { this.earcons.stopWorking(); this.turnOff(); return; }
         reply = e.command(intent.name, Source.VOICE);
       } else if (intent.type === "choose") reply = this.afterAction(await e.choose(intent.choiceId, Source.VOICE));
       else if (intent.type === "goto") reply = await e.goTo(intent.flow, Source.VOICE);
@@ -464,7 +469,7 @@ export class VoiceOrchestrator {
         if (!this.interrupted) {
           // FR-99: cancelled while working, so nothing from the turn stays applied
           e.rollback(cp); this.brain.newConversation(); this.earcons.stopWorking();
-          this.speak("Cancelled. Nothing from that turn was applied.", false);
+          if (!this.offPressed) this.speak("Cancelled. Nothing from that turn was applied.", false); // turned off with the button: silent
         }
         return;
       }
@@ -500,13 +505,14 @@ export class VoiceOrchestrator {
     const step = this.engine.step;
     if (this.misses === 1) { this.forceListen = true; this.speak((silence ? "I didn't hear anything. " : "Sorry, I didn't catch that. ") + step.question, true); }
     else if (this.misses === 2) { this.forceListen = true; this.speak(`Let me put it another way. ${step.question} ${optionsPhrase(step, true)}`, true); }
-    else { this.set({ showOptions: true }); this.misses = 0; this.speak("I'm having trouble hearing you. The choices are on the screen as buttons, or press the voice button and try me again.", false); }
+    else { this.set({ showOptions: true }); this.misses = 0; this.speak("I'm having trouble hearing you. The choices are on the screen as buttons. I'm still listening.", true); }
   }
 
   // ------------------------------------------------------------------ speaking
 
   speak(text, keepAwake) {
     this.earcons.stopWorking();
+    this.input.cancel(); // never listen while speaking
     if (!keepAwake) this.awake = false;
     if (!this.output.available) { this.set({ said: stripLang(text) }); this.afterSpeaking(); return; }
     this.set({ said: stripLang(text), state: "SPEAKING" });
@@ -520,10 +526,9 @@ export class VoiceOrchestrator {
     if (this.output.available && !this.output.spoke) {
       this.set({ turnInfo: `Voice: this device didn't play my reply${this.output.lastError ? ` (${this.output.lastError})` : ""}. Check the media volume, and that a text-to-speech voice is installed in the phone's settings.` });
     }
-    const e = this.engine, step = e.step;
-    const follow = this.awake && (this.forceListen || !!e.pending || (e.voiceGuideOn && !step.inClass && step.choices.length > 0));
+    // while the agent is on, it always listens again after speaking, in class too; only the voice button turns it off
     this.forceListen = false;
-    if (follow && e.st.signedInPhone && this.input.available) this.listen(false); else this.sleep();
+    if (this.on && this.canListen()) this.listen(false); else this.sleep();
   }
 
   startBargeIn() {
@@ -536,7 +541,7 @@ export class VoiceOrchestrator {
     this.interrupted = true;
     if (this.abort) this.abort.abort();
     this.output.stop(); this.vad.stop();
-    if (!this.engine.st.signedInPhone || !this.input.available) { this.sleep(); return; }
+    if (!this.canListen()) { this.sleep(); return; }
     this.awake = true;
     this.listen(true);
   }
