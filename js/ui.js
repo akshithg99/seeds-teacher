@@ -61,7 +61,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   window.addEventListener("resize", fit);
 
   // ------------------------------------------------------------------ actions
-  const say = (text, read = false) => { setFeedback(text); voice.afterButton(text, read); };
+  // a reply the agent reads aloud is not also shown as a pop-up; it is in the voice bar while it is spoken
+  const say = (text, read = false) => { if (!read) setFeedback(text); voice.afterButton(text, read); };
   async function onChoice(c) {
     if (voice.state === "THINKING" || engine.busy) return;
     if (!c.enabled) { say(c.whyDisabled || "That is not available right now.", true); return; }
@@ -148,6 +149,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
 
   // ------------------------------------------------------------------ feedback bar (with Undo, FR-98)
   function renderFeedback() {
+    // no pop-up while the agent is speaking; Undo still works by voice and Ctrl/⌘ + Z
+    if (voice.state === "SPEAKING") { ui.feedback = ""; fbEl.replaceChildren(); fit(); return; }
     const u = engine.undoPoint !== ui.hiddenUndo ? engine.undoPoint : null;
     if (u && u !== ui.shownUndo) { ui.shownUndo = u; hideBarLater(); } // a new change: show Undo for a few seconds
     if (!ui.feedback && !u) { fbEl.replaceChildren(); fit(); return; }
@@ -368,7 +371,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   }
 
   engine.subscribe(render);
-  voice.subscribe(() => { renderVoice(); if (voice.state === "THINKING" || voice.state === "SLEEP") render(); });
+  voice.subscribe(() => { renderVoice(); renderFeedback(); if (voice.state === "THINKING" || voice.state === "SLEEP") render(); });
   claude.onChange(() => render());
   if (window.speechSynthesis) window.speechSynthesis.addEventListener("voiceschanged", () => render());
 
