@@ -1,6 +1,7 @@
 import { Curriculum, LANGS } from "./data.js";
 import { Tier, Flow, makeStep, choice, section, inLang } from "./step.js";
 import * as Offline from "./offline.js";
+import { TikTabs } from "./tiktabs.js";
 
 export const PLANNED_MINUTES = 40;
 const NOT_APPROVED = "Created by SEEDS PROJECT-B — not yet approved";
@@ -33,6 +34,21 @@ function historySuggestion(e, stepId, choices) {
   const sug = { choiceId: c.id, reason: `because you chose it last time, on ${e.fmtDate(last.ts)}` };
   const first = { ...c, label: `Same as last time: ${c.label}`, suggested: true, words: [...c.words, c.label.toLowerCase()] };
   return [[first, ...choices.filter((x) => x.id !== c.id)], sug];
+}
+
+const TIK_HELP = `The TIK has tabs: ${TikTabs.titles.slice(0, -1).join(", ")} and Why. Say next tab, previous tab, or a tab's name.`;
+const chapterKnown = (chx) => [["Class", `${chx.classNum}`], ["Subject", "Science"], ["Chapter", `${chx.number}. ${chx.name}`]];
+/** Quiz questions as sent by IVR ("Press 1: ..."); with key, the right answer is marked for the teacher. */
+const quizQuestions = (e, q, key) => q.questions.map((y, i) => section(`Question ${i + 1}` + (y.topicId && Curriculum.topic(y.topicId) ? ` · ${Curriculum.topic(y.topicId).name}` : ""),
+  [y.q, ...y.options.map((o, k) => `Press ${k + 1}: ${o}` + (key && k === y.answer ? " (answer)" : ""))], { lang: q.lang }));
+const answerKey = (q) => section("Answer key", q.questions.map((y, i) => `Question ${i + 1}: ${y.answer + 1}, ${y.options[y.answer]}`), { lang: q.lang });
+/** How the class did, for the class as a whole (v5.4 8.6): never per student. */
+function quizAnalytics(e, q) {
+  const s = e.quizStats(q);
+  if (!s) return [section("How the class did", [q.state === "Live" ? `Responses so far: ${e.simulatedResponses(q)} of ${q.classSize}. Results show when you close the quiz.` : "Not shared to IVR yet."])];
+  return [section("How the class did", [`${s.responses} of ${q.classSize} students answered. ${s.wrongPct}% of the answers were wrong.`,
+      ...q.perQuestionCorrect.map((n, i) => `Question ${i + 1}: ${n} of ${s.responses} correct.`)]),
+    section("Needs reinforcement", s.weak.length ? s.weak.map((x) => `${x.name}: ${x.wrongPct}% of the answers were wrong.`) : ["No concept stands out."])];
 }
 
 const tikPanel = (e, t, before, status) => ({ tik: t, before, suggestions: Offline.suggestions(t, e.chapterOf(e.lesson())).map((s) => s.text), status });
@@ -96,7 +112,7 @@ export function buildStep(e) {
       if (x.tik) return makeStep("ws_item", Flow.WORKSPACE, "TIK", "Anything else?", [back], {
         announce: `${x.title}. Say next tab, or a tab's name, to move through it.`, known, contentLang: x.tik.lang, secondary: [homeBtn()],
         tik: { tik: x.tik, before: null, suggestions: [], status: x.status },
-        help: "The TIK has tabs: Summary, Objective, Steps, Activities, Materials, Accessibility, Extension, Sources and Why. Say next tab, previous tab, or a tab's name." });
+        help: TIK_HELP });
       if (x.clip) {
         const playing = e.audio.isPlaying();
         return makeStep("ws_item", Flow.WORKSPACE, "Audio", playing ? "Playing. Stop it?" : "Play it?", [
@@ -105,9 +121,12 @@ export function buildStep(e) {
           sections: [section("What it says", [x.clip.script], { lang: x.clip.lang })], secondary: [homeBtn()] });
       }
       const q = x.quiz;
-      return makeStep("ws_item", Flow.WORKSPACE, "Quiz", "Anything else?", [back], {
+      const next = x.catalog ? choice("use_quiz", "Use this quiz", { words: ["use", "use this quiz", "yes"] })
+        : { Draft: choice("review_quiz", "Review and approve", { words: ["review", "approve"] }), Approved: choice("share_quiz", "Share to IVR", { words: ["share", "share to ivr"] }),
+          Live: choice("live_quiz", "See responses", { words: ["responses", "see responses"] }) }[q.state];
+      return makeStep("ws_item", Flow.WORKSPACE, "Quiz", next ? `${next.label}?` : "Anything else?", [...(next ? [next] : []), back], {
         announce: `${x.title}. What it checks: ${q.checks}`, known: [...known, ["Questions", `${q.questions.length}`]], contentLang: q.lang, secondary: [homeBtn()],
-        sections: q.questions.map((y, i) => section(`Question ${i + 1}`, [y.q, ...y.options.map((o, k) => k === y.answer ? `${o} (correct answer)` : o)], { lang: q.lang })) });
+        sections: [...quizQuestions(e, q, true), answerKey(q), ...(x.catalog ? [] : quizAnalytics(e, q))] });
     }
 
     case "awaiting": {
@@ -115,7 +134,7 @@ export function buildStep(e) {
       st.lessons.filter((x) => x.tikState === "DRAFT").forEach((x) => items.push(choice(`l:${x.id}`, `TIK: ${e.lessonName(x)}`)));
       st.lessons.filter((x) => x.questionSets.length && x.questionSets.some((q) => !q.approved) && x.tikState !== "DRAFT").forEach((x) => items.push(choice(`l:${x.id}`, `Questions: ${e.lessonName(x)}`)));
       st.lessons.filter((x) => x.audio.some((a) => !a.approved) && e.ready(x)).forEach((x) => items.push(choice(`l:${x.id}`, `Audio: ${e.lessonName(x)}`)));
-      st.quizzes.filter((q) => q.state === "Draft").forEach((q) => items.push(choice(`q:${q.id}`, `Quiz: ${e.lessonName(e.lesson(q.lessonId))}`)));
+      st.quizzes.filter((q) => q.state === "Draft").forEach((q) => items.push(choice(`q:${q.id}`, `Quiz: ${e.quizName(q)}`)));
       st.records.filter((x) => !x.saved).forEach((x) => items.push(choice(`r:${x.id}`, `Class record: ${e.lessonName(e.lesson(x.lessonId))}, ${e.fmtDate(x.createdAt)}`)));
       st.patterns.filter((p) => p.state === "Proposed").forEach((p) => items.push(choice(`p:${p.id}`, `Follow-up: ${p.concept}`)));
       const uniq = items.filter((c, i) => items.findIndex((x) => x.id === c.id) === i);
@@ -225,7 +244,7 @@ export function buildStep(e) {
         ...(has ? [choice("apply_suggestions", "Apply suggested changes", { words: ["apply", "apply suggestions", "suggested changes", "accept"] })] : []),
         choice("change", "Ask for a change", { words: ["change", "ask for a change", "edit"] }),
       ], { announce: "Synced from Content Studio. Say next tab, or a tab's name, to move through it.", known: lessonKnown, tik: panel, progress: planProgress(1), contentLang: t && t.lang,
-        help: "The TIK has tabs: Summary, Objective, Steps, Activities, Materials, Accessibility, Extension, Sources and Why. Say next tab, previous tab, or a tab's name." });
+        help: TIK_HELP });
     }
 
     case "plan_tik_mode": {
@@ -259,16 +278,16 @@ export function buildStep(e) {
         announce: `${l && l.tik && l.tik.provenance}.` + (l && l.tik && l.tik.instruction ? ` Your request: ${l.tik.instruction}.` : "") +
           (has ? ` There ${panel.suggestions.length === 1 ? "is 1 suggested change" : `are ${panel.suggestions.length} suggested changes`} on the Summary tab.` : ""),
         known: lessonKnown, tik: panel, progress: planProgress(1), contentLang: l && l.tik && l.tik.lang,
-        help: "The TIK has tabs: Summary, Objective, Steps, Activities, Materials, Accessibility, Extension, Sources and Why. Say next tab, previous tab, or a tab's name. Say undo to go back to the previous version." });
+        help: TIK_HELP + " Say undo to go back to the previous version." });
     }
 
     case "tik_change": {
       const t = (l && l.tik) || (ch && ch.syncedTik);
-      return makeStep("tik_change", Flow.PLAN, "Change the TIK", "What should I change? You can name one step, one activity or the whole TIK.",
+      return makeStep("tik_change", Flow.PLAN, "Change the TIK", "What should I change? You can name one activity or the whole TIK.",
         [choice("back", "Back to the TIK", { words: ["back"] })],
         { known: lessonKnown, progress: planProgress(1), contentLang: t && t.lang,
           tik: t ? tikPanel(e, t, l && l.tikBefore, l && l.tikState === "APPROVED" ? "Approved" : "Not yet approved") : null,
-          freeSpeech: { prompt: "For example: make the activities work in pairs, or remove step 2", longWindow: true },
+          freeSpeech: { prompt: "For example: make the activities work in pairs, or remove activity 2", longWindow: true },
           help: e.gen.online ? null : Offline.REVISE_HINT });
     }
 
@@ -343,29 +362,30 @@ export function buildStep(e) {
         homeBtn(),
       ], { announce: `${e.lessonName(l)}. ` + (ok ? (e.approvedAudio(l).length ? "Ready to teach." : "Ready to teach, no audio yet.") : "Not ready."),
         known: lessonKnown, contentLang: l && l.tik && l.tik.lang,
-        sections: [...(tp ? [section("What students learn (Course)", tp.definitions)] : []), ...(l && l.tik ? [section("Objective", [l.tik.objective], { lang: l.tik.lang }), section("Materials", l.tik.materials, { lang: l.tik.lang })] : [])] });
+        sections: [...(tp ? [section("What students learn (Course)", tp.definitions)] : []), ...(l && l.tik ? [section("Objectives", l.tik.objectives, { lang: l.tik.lang }), section("Materials required", TikTabs.materials(l.tik), { lang: l.tik.lang })] : [])] });
     }
 
     case "teach_step": {
       const s = e.session() || e.activeSession();
-      const steps = (l && l.tik && l.tik.steps) || [];
+      const steps = l && l.tik ? TikTabs.activities(l.tik) : [];
       const i = Math.min(Math.max(0, (s && s.stepIndex) || 0), Math.max(0, steps.length - 1));
+      const a = steps[i];
       const hasAudio = e.approvedAudio(l).length > 0;
       const tl = l && l.tik && l.tik.lang;
       // questions are offered only if they were prepared before class (8.4)
       const hasQs = !!l && l.questionSets.some((q) => q.approved && q.check.length);
       const what = ["play audio", ...(hasQs ? ["learning check"] : [])].join(", ");
-      return makeStep("teach_step", Flow.TEACH, `Step ${i + 1} of ${steps.length}`,
-        i < steps.length - 1 ? `Next step, ${what}, or end class?` : `This is the last step. ${cap(what)}, or end class?`, [
-          ...(i < steps.length - 1 ? [choice("next", "Next step", { words: ["next", "next step"] })] : []),
+      return makeStep("teach_step", Flow.TEACH, `Activity ${i + 1} of ${steps.length}`,
+        i < steps.length - 1 ? `Next activity, ${what}, or end class?` : `This is the last activity. ${cap(what)}, or end class?`, [
+          ...(i < steps.length - 1 ? [choice("next", "Next activity", { words: ["next", "next activity", "next step"] })] : []),
           choice("audio", "Play audio", { words: ["play audio", "audio", "play"], enabled: hasAudio, whyDisabled: "No audio for this lesson. Teacher-led works as usual." }),
           ...(hasQs ? [choice("lc", "Learning check", { words: ["learning check", "questions", "the questions"] })] : []),
           choice("end", "End class", { tier: Tier.COMMIT, words: ["end class", "end"], commitWord: "end class", readBack: "I'll end the class and ask what was covered." }),
-        ], { announce: inLang(tl, steps[i] || ""), inClass: true, contentLang: tl,
+        ], { announce: a ? inLang(tl, TikTabs.actText(a)) : null, inClass: true, contentLang: tl,
           known: [["Lesson", e.lessonName(l)], ["Method", "Your choice: activity, teacher-led, audio, discussion or tactile materials"]],
-          sections: [...(i === 0 && tp ? [section("What students learn (Course)", tp.definitions)] : []), section(`Step ${i + 1}`, [steps[i] || ""], { lang: tl })],
-          secondary: i > 0 ? [choice("prev", "Previous step", { words: ["previous", "previous step"] })] : [],
-          progress: { labels: steps.map((_, k) => `Step ${k + 1}`), current: i } });
+          sections: [...(i === 0 && tp ? [section("What students learn (Course)", tp.definitions)] : []), ...(a ? [section(a.name, [`Materials required: ${a.materials.join(", ") || "None"}`, ...a.flow.map((x, k) => `${k + 1}. ${x}`)], { lang: tl })] : [])],
+          secondary: i > 0 ? [choice("prev", "Previous activity", { words: ["previous", "previous activity", "previous step"] })] : [],
+          progress: { labels: steps.map((_, k) => `Activity ${k + 1}`), current: i } });
     }
 
     case "audio_player": {
@@ -421,15 +441,19 @@ export function buildStep(e) {
     case "early_finish": {
       const s = e.session();
       const left = s ? PLANNED_MINUTES - Math.floor((e.now() - s.startedAt) / 60000) : 10;
-      return makeStep("early_finish", Flow.TEACH, "Time left", "Start the extension activity, or skip?",
-        [choice("start_ext", "Start extension activity", { words: ["start", "extension"] }), choice("skip", "Skip", { words: ["skip"] })],
+      const ex = l && l.tik && TikTabs.extension(l.tik);
+      return makeStep("early_finish", Flow.TEACH, "Time left", "Start the exercises and reinforcement activity, or skip?",
+        [choice("start_ext", "Start the activity", { words: ["start", "exercise", "exercises", "extension"] }), choice("skip", "Skip", { words: ["skip"] })],
         { announce: `You've covered today's plan with about ${left} minutes left.`, inClass: true,
-          sections: [section("Extension activity", [(l && l.tik && l.tik.extension) || "", "Estimated time: about 10 minutes."], { lang: l && l.tik && l.tik.lang })] });
+          sections: ex ? [section(`Exercises and reinforcement: ${ex.name}`, [...ex.flow, "Estimated time: about 10 minutes."], { lang: l.tik.lang })] : [] });
     }
 
-    case "extension":
-      return makeStep("extension", Flow.TEACH, "Extension activity", "Say done when the activity is over.", [choice("done", "Done", { words: ["done", "finished"] })],
-        { inClass: true, announce: inLang(l && l.tik && l.tik.lang, (l && l.tik && l.tik.extension) || ""), sections: [section("Extension activity", [(l && l.tik && l.tik.extension) || ""], { lang: l && l.tik && l.tik.lang })] });
+    case "extension": {
+      const ex = l && l.tik && TikTabs.extension(l.tik);
+      return makeStep("extension", Flow.TEACH, "Exercises and reinforcement", "Say done when the activity is over.", [choice("done", "Done", { words: ["done", "finished"] })],
+        { inClass: true, announce: ex ? inLang(l.tik.lang, TikTabs.actText(ex)) : null,
+          sections: ex ? [section(ex.name, [`Materials required: ${ex.materials.join(", ") || "None"}`, ...ex.flow.map((x, k) => `${k + 1}. ${x}`)], { lang: l.tik.lang })] : [] });
+    }
 
     case "lc_read": {
       const sets = l ? l.questionSets.filter((q) => q.approved && q.check.length) : [];
@@ -491,53 +515,105 @@ export function buildStep(e) {
         [...(open ? [choice("followups", "See follow-up suggestion", { words: ["follow up", "suggestion"] })] : []), homeBtn()], { announce: "Saved to your teaching history." });
     }
 
-    // ======================================================== F8 Assessment/Quiz
-    case "quiz_pick": {
-      const ready = st.lessons.filter((x) => e.ready(x)).reverse();
-      if (!ready.length) return makeStep("quiz_pick", Flow.QUIZ, "Graded quiz", "No lesson is ready yet. Plan a lesson first?", [choice("plan", "Plan a lesson"), homeBtn()]);
-      return makeStep("quiz_pick", Flow.QUIZ, "Graded quiz", "Which lesson is the quiz for?", paged(ready.map((x) => choice(`l:${x.id}`, e.lessonName(x))), r.page), { secondary: [homeBtn()] });
+    // ======================================================== F8 Assessment/Quiz (v5.4 8.6)
+    case "quiz_home": {
+      const n = (state) => st.quizzes.filter((q) => q.state === state).length;
+      return makeStep("quiz_home", Flow.QUIZ, "Assessment/Quiz", "Plan a quiz, or open your quizzes?", [
+        choice("plan", "Plan a quiz", { words: ["plan", "plan a quiz", "new quiz", "make a quiz", "yes"] }),
+        choice("mine", "Your quizzes", { words: ["my quizzes", "your quizzes", "quizzes", "results", "answers"] }),
+      ], { sections: [
+        section("Plan a quiz", ["Use a quiz from Content Studio, or make one for a whole chapter or some of its topics. Every question is multiple choice, with an answer key.",
+          "Share to IVR sends only the questions. The answer key stays with you."]),
+        section("Your quizzes", [`${n("Draft")} to approve, ${n("Approved")} ready to share, ${n("Live")} shared to IVR, ${n("Closed")} with results.`,
+          "Every quiz is in your workspace with its answer key and how the class did."]),
+      ], secondary: [homeBtn()] });
+    }
+
+    case "quiz_class":
+      return makeStep("quiz_class", Flow.QUIZ, "Plan a quiz", "Which class is the quiz for?", classChoices(), { secondary: [homeBtn()] });
+
+    case "quiz_chapter": {
+      const c = d.classNum != null ? d.classNum : 6;
+      return makeStep("quiz_chapter", Flow.QUIZ, "Plan a quiz", "Which chapter?",
+        paged(Curriculum.forClass(c).map((x) => choice(x.id, `Chapter ${x.number}: ${x.name}`, { words: [x.name.toLowerCase(), `chapter ${x.number}`] })), r.page),
+        { known: [["Class", `${c}`], ["Subject", "Science"]] });
+    }
+
+    case "quiz_source": {
+      const chx = Curriculum.chapter(d.chapterId);
+      return makeStep("quiz_source", Flow.QUIZ, "Plan a quiz", "Content Studio has a quiz for this chapter. Use it, or make a new one?", [
+        choice("use_cs", "Use the Content Studio quiz", { words: ["use", "use it", "content studio", "yes"] }),
+        choice("make", "Make a new quiz", { words: ["make", "new", "make a new quiz", "generate"] }),
+      ], { known: chapterKnown(chx), sections: [section("From Content Studio", [chx.syncedQuiz.checks])] });
+    }
+
+    case "quiz_scope": {
+      const chx = Curriculum.chapter(d.chapterId);
+      return makeStep("quiz_scope", Flow.QUIZ, "Plan a quiz", "A quiz on the whole chapter, or on some topics?", [
+        choice("chapter", "The whole chapter", { words: ["whole chapter", "chapter", "all", "everything"] }),
+        choice("topics", "Some topics", { words: ["some topics", "topics", "specific topics"] }),
+      ], { known: chapterKnown(chx), sections: [section("Topics in this chapter", chx.topics.map((x) => x.name))] });
+    }
+
+    case "quiz_topics": {
+      const chx = Curriculum.chapter(d.chapterId), picked = d.quizTopics;
+      return makeStep("quiz_topics", Flow.QUIZ, "Choose topics", picked.length ? `${plural(picked.length, "topic", "topics")} chosen. Add another, or make the quiz?` : "Which topics? Choose one or more.", [
+        ...chx.topics.map((x) => choice(x.id, (picked.includes(x.id) ? "Chosen: " : "") + x.name, { words: [x.name.toLowerCase()] })),
+        choice("make", "Make the quiz", { words: ["make", "make the quiz", "done"], enabled: picked.length > 0, whyDisabled: "Choose at least one topic first." }),
+      ], { known: chapterKnown(chx), help: "Choose a topic again to take it out." });
     }
 
     case "quiz_review": {
       const q = st.quizzes.find((x) => x.id === d.quizId);
-      const approved = q && q.state !== "Draft";
-      return makeStep("quiz_review", Flow.QUIZ, "Graded quiz", approved ? "This quiz is approved." : "Hear the questions, approve, or regenerate?",
-        approved ? [homeBtn()] : [
+      if (!q) return makeStep("quiz_review", Flow.QUIZ, "Quiz", "This quiz is no longer here. Go to Home?", [homeBtn()]);
+      const approved = q.state !== "Draft", synced = q.provenance.startsWith("Synced");
+      return makeStep("quiz_review", Flow.QUIZ, "Review the quiz",
+        approved ? (q.state === "Approved" ? "This quiz is approved. Share it to IVR?" : "This quiz is already shared.") : synced ? "Hear the questions, or approve the quiz?" : "Hear the questions, approve, or make a new version?",
+        approved ? [...(q.state === "Approved" ? [choice("share", "Share to IVR", { words: ["share", "share to ivr", "yes"] })] : []), homeBtn()] : [
           choice("hear", "Hear the questions", { tier: Tier.READ, words: ["hear", "read"] }),
-          choice("approve", "Approve", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve this graded quiz with ${q && q.questions.length} questions. Students will hear it on the phone call.` }),
-          choice("regenerate", "Regenerate", { words: ["regenerate", "try again", "new quiz"] }),
-        ], { banner: approved ? null : NOT_APPROVED, announce: `Graded quiz. ${q && q.provenance}. What this quiz checks: ${q && q.checks}`, known: lessonKnown, contentLang: q && q.lang,
-          sections: q ? q.questions.map((qq, i) => section(`Question ${i + 1}`, [qq.q, ...qq.options.map((o, j) => `Press ${j + 1}: ${o}` + (j === qq.answer ? " (answer)" : ""))], { lang: q.lang })) : [] });
+          choice("approve", "Approve", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve this quiz with ${q.questions.length} questions and its answer key.` }),
+          ...(synced ? [] : [choice("regenerate", "Make a new version", { words: ["regenerate", "try again", "new version", "new quiz"] })]),
+        ], { banner: approved || synced ? null : NOT_APPROVED, announce: `${q.provenance}. What this quiz checks: ${q.checks}`, known: e.quizKnown(q), contentLang: q.lang,
+          sections: [...quizQuestions(e, q, true), answerKey(q)] });
     }
 
     case "quiz_window": {
+      const opt = (id, label) => choice(id, label, { words: [label.toLowerCase(), id] });
+      const [choices, sug] = historySuggestion(e, "quiz_window", [opt("tomorrow", "Until tomorrow"), opt("friday", "Until Friday"), opt("three_days", "For three days")]);
+      return makeStep("quiz_window", Flow.QUIZ, "Share to IVR", "How long should the quiz stay open?", choices, { suggestion: sug,
+        known: e.quizKnown(st.quizzes.find((x) => x.id === d.quizId)), secondary: [homeBtn("Not now")] });
+    }
+
+    case "quiz_share": {
       const q = st.quizzes.find((x) => x.id === d.quizId);
-      const topic = (e.topicOf(e.lesson(q && q.lessonId)) || {}).name;
-      const opt = (id, label, until) => choice(id, label, { tier: Tier.COMMIT, words: [label.toLowerCase(), id], commitWord: "open",
-        readBack: `I'll open the graded quiz on ${topic} until ${until}. Students answer by phone call at home, with a parent or another responsible adult present.` });
-      const [choices, sug] = historySuggestion(e, "quiz_window", [opt("tomorrow", "Until tomorrow", "tomorrow evening"), opt("friday", "Until Friday", "Friday evening"), opt("three_days", "For three days", "three days from now")]);
-      return makeStep("quiz_window", Flow.QUIZ, "Open the quiz", "Open until when?", choices, { suggestion: sug,
-        announce: "Students answer at home by an ordinary phone call, with a parent or another responsible adult present.", known: lessonKnown, secondary: [homeBtn("Not now")] });
+      const until = d.quizUntil || "Friday evening";
+      return makeStep("quiz_share", Flow.QUIZ, "Share to IVR", "Share to IVR?", [
+        choice("share", "Share to IVR", { tier: Tier.COMMIT, words: ["share", "share to ivr", "send"], commitWord: "share",
+          readBack: `I'll send the ${q.questions.length} questions by IVR call to each student's registered phone, open until ${until}. The answer key is not sent.` }),
+        choice("when", "Change how long it stays open", { words: ["change", "how long", "until"] }),
+      ], { announce: "Only the questions and their options go out. Students answer at home by an ordinary phone call, with a parent or another responsible adult present.",
+        known: [...e.quizKnown(q), ["Open until", until]], contentLang: q.lang, secondary: [homeBtn("Not now")],
+        sections: [...quizQuestions(e, q, false), section("Not sent", ["The answer key. It stays with you, in your workspace."])] });
     }
 
     case "quiz_live": {
       const q = st.quizzes.find((x) => x.id === d.quizId);
-      return makeStep("quiz_live", Flow.QUIZ, "Quiz live", "Hear the number of responses, or close the quiz?", [
+      return makeStep("quiz_live", Flow.QUIZ, "Shared to IVR", "Hear the number of responses, or close the quiz?", [
         choice("refresh", "How many responses?", { tier: Tier.READ, words: ["how many", "responses"] }),
         choice("close", "Close quiz now", { tier: Tier.COMMIT, words: ["close"], commitWord: "close", readBack: "I'll close the quiz now. No more answers will be accepted." }),
         homeBtn(),
-      ], { announce: `Live until ${q && q.openUntil}.`, sections: [section("Status", [`Responses so far: ${q ? e.simulatedResponses(q) : 0} of ${q && q.classSize}.`, "Phone calls are simulated in this prototype."])] });
+      ], { announce: `Open until ${q && q.openUntil}.`, known: e.quizKnown(q),
+        sections: [section("Status", [`Responses so far: ${q ? e.simulatedResponses(q) : 0} of ${q && q.classSize}.`, "Phone calls are simulated in this prototype."])] });
     }
 
     case "quiz_results": {
       const q = st.quizzes.find((x) => x.id === d.quizId);
-      const topic = (e.topicOf(e.lesson(q && q.lessonId)) || {}).name;
       const open = st.patterns.filter((p) => p.state === "Proposed").length;
+      const s = q && e.quizStats(q);
       return makeStep("quiz_results", Flow.QUIZ, "Quiz results", "Where would you like to go?",
         [...(open ? [choice("followups", "See follow-up suggestion", { words: ["follow up"] })] : []), homeBtn()], {
-          announce: `${q && q.responses} students answered. ${q && q.wrongPct}% of the answers were wrong.`,
-          sections: [section("The class as a whole", ((q && q.perQuestionCorrect) || []).map((n, i) => `Question ${i + 1}: ${n} of ${q.responses} correct.`)),
-            section("Needs reinforcement", [q && q.wrongPct >= 20 ? `${topic}: ${q.wrongPct}% of the answers were wrong.` : "No concept stands out."])] });
+          announce: s ? `${s.responses} students answered. ${s.wrongPct}% of the answers were wrong.` : null, known: e.quizKnown(q),
+          sections: q ? quizAnalytics(e, q) : [] });
     }
 
     // ======================================================== F10 Remediation
@@ -570,10 +646,10 @@ export function buildStep(e) {
 
     case "followup_type": {
       const p = st.patterns.find((x) => x.id === d.patternId);
-      const base = p && e.lesson(p.lessonId);
+      const cls = p && (p.classNum != null ? p.classNum : (e.lesson(p.lessonId) || {}).classNum);
       return makeStep("followup_type", Flow.FOLLOWUP, "Follow-up content", "A simpler activity in a TIK, or a new quiz?",
         [choice("tik", "A simpler TIK", { words: ["tik", "simpler", "activity"] }), choice("quiz", "A new quiz", { words: ["quiz", "new quiz"] })],
-        { announce: base ? e.prepLine(base.classNum) : null, sections: [section("What happens", ["It goes through the normal approval step before it is used."])] });
+        { announce: cls != null ? e.prepLine(cls) : null, sections: [section("What happens", ["It goes through the normal approval step before it is used."])] });
     }
 
     default:

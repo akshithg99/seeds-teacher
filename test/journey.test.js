@@ -257,9 +257,9 @@ test("Workspace lists Content Studio items and the teacher's own, and opens each
   assert.equal(id(), "workspace");
   const syncedTiks = Curriculum.chapters.filter((c) => c.syncedTik).length;
   const syncedAudio = Curriculum.chapters.flatMap((c) => c.topics).filter((t) => t.syncedAudio).length;
-  assert.equal(e.step.sections[0].lines[0], `${syncedTiks} TIKs, ${syncedAudio} audio, 0 quizzes`);
+  const syncedQuizzes = Curriculum.chapters.filter((c) => c.syncedQuiz).length;
+  assert.equal(e.step.sections[0].lines[0], `${syncedTiks} TIKs, ${syncedAudio} audio, ${syncedQuizzes === 1 ? "1 quiz" : `${syncedQuizzes} quizzes`}`);
   assert.equal(e.step.sections[1].lines[0], "0 TIKs, 0 audio, 0 quizzes");
-  assert.equal(e.step.choices.find((c) => c.id === "quizzes").enabled, false); // nothing to open yet
 
   // a Content Studio TIK opens as tabs, read-only
   await choose("tiks");
@@ -287,4 +287,63 @@ test("Workspace lists Content Studio items and the teacher's own, and opens each
   assert.equal(e.step.sections[1].lines[0], "1 TIK, 0 audio, 0 quizzes"); // lesson audio is never made in the app (8.3)
   await choose("tiks");
   assert.ok(e.step.sections[1].lines.some((x) => /Poles of a magnet: topic TIK · Not approved yet/.test(x)));
+});
+
+test("Plan a quiz: Content Studio's or a new one, for the chapter or some topics; Share to IVR sends only the questions (8.6)", async () => {
+  await choose("no");
+  await e.goTo(Flow.QUIZ, Source.BUTTON);
+  assert.equal(id(), "quiz_home");
+  assert.deepEqual(e.step.choices.map((c) => c.id), ["plan", "mine"]);
+
+  // Content Studio has a quiz for Exploring Magnets: it is offered first, with its answer key
+  await choose("plan"); await choose("c6"); await choose("6-magnets");
+  assert.equal(id(), "quiz_source");
+  await choose("use_cs");
+  assert.equal(id(), "quiz_review");
+  let q = e.st.quizzes.at(-1);
+  assert.equal(q.provenance, "Synced from Content Studio");
+  assert.ok(e.step.sections.some((s) => s.heading === "Answer key"));
+  assert.ok(!e.step.choices.some((c) => c.id === "regenerate"), "Content Studio's quiz is used as it is");
+  await choose("approve", true);
+  assert.equal(id(), "quiz_window");
+  await choose("friday");
+  assert.equal(id(), "quiz_share");
+  // what goes to IVR: the questions and options, never the answer key
+  const sent = e.step.sections.filter((s) => s.heading.startsWith("Question")).flatMap((s) => s.lines);
+  assert.ok(sent.length && !sent.some((x) => /\(answer\)/.test(x)));
+  assert.deepEqual(e.step.sections.at(-1).lines, ["The answer key. It stays with you, in your workspace."]);
+  assert.equal(e.step.choices[0].label, "Share to IVR");
+  const rb = await e.choose("share", Source.BUTTON);
+  assert.match(rb, /The answer key is not sent/);
+  assert.match(await e.choose("share", Source.BUTTON, true), /Shared to IVR until Friday evening. Only the questions were sent./);
+  assert.equal(id(), "quiz_live");
+  await choose("close", true);
+  assert.equal(id(), "quiz_results");
+  q = e.st.quizzes.find((x) => x.id === q.id);
+  const stats = e.quizStats(q);
+  assert.deepEqual(stats.topics.map((t) => t.id), ["6-magnets-1", "6-magnets-2", "6-magnets-3"]);
+  assert.ok(!JSON.stringify(e.step).match(/student[s]? (?:scored|named)|names/i), "results are for the class as a whole");
+  assert.equal(e.st.patterns.length, stats.weak.length); // one follow-up per weak topic
+
+  // the workspace keeps it, with the answer key and how the class did; the Content Studio original is not listed twice
+  await e.goTo(Flow.WORKSPACE, Source.BUTTON); await choose("quizzes");
+  assert.deepEqual(e.step.choices.filter((c) => c.id.startsWith("q") || c.id.startsWith("csq")).map((c) => c.id), [`q:${q.id}`]);
+  await choose(`q:${q.id}`);
+  assert.deepEqual(e.step.sections.slice(-3).map((s) => s.heading), ["Answer key", "How the class did", "Needs reinforcement"]);
+
+  // or a new quiz on some topics only
+  await e.goTo(Flow.QUIZ, Source.BUTTON);
+  await choose("plan"); await choose("c6"); await choose("6-magnets"); await choose("make");
+  assert.equal(id(), "quiz_scope");
+  await choose("topics");
+  assert.equal(e.step.choices.find((c) => c.id === "make").enabled, false);
+  await choose("6-magnets-2"); await choose("6-magnets-3"); await choose("6-magnets-3"); // choosing again takes it out
+  assert.deepEqual(e.draft.quizTopics, ["6-magnets-2"]);
+  await choose("make");
+  assert.equal(id(), "quiz_review");
+  const mine = e.st.quizzes.at(-1);
+  assert.deepEqual(mine.topicIds, ["6-magnets-2"]);
+  assert.ok(mine.questions.every((x) => x.topicId === "6-magnets-2" && x.options.length >= 2));
+  assert.ok(e.step.banner); // a draft waits for approval
+  assert.equal(e.quizName(mine), "Class 6 Science, Exploring Magnets: Poles of a magnet");
 });

@@ -162,7 +162,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
   function renderTik(p, tab, contentLang) {
     const titles = TikTabs.titles;
     const changes = TikTabs.changes(p.before, p.tik);
-    const counts = { 2: p.tik.steps.length, 3: p.tik.activities.length, 4: p.tik.materials.length };
+    const counts = { 3: TikTabs.activities(p.tik).length, 4: p.tik.exercises.length };
     const strip = h("div", { class: "tabstrip", role: "tablist", "aria-label": "Teacher Information Kit" },
       titles.map((t, i) => h("button", {
         class: "tab", role: "tab", id: `tab-${i}`, type: "button", "aria-selected": String(i === tab), "aria-controls": "tikpanel", tabindex: i === tab ? "0" : "-1", "data-key": `tab-${i}`,
@@ -177,9 +177,10 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     if (tab === 0) body = TikTabs.summary(p).map((s) => [h("h3", {}, s.heading), h("ul", {}, s.lines.map((x) => h("li", { lang: s.heading === "What changed" ? lc(p.tik.lang) : null }, x)))]);
     else {
       const added = changes.has(tab) ? changes.get(tab)[0] : [], removed = changes.has(tab) ? changes.get(tab)[1] : [];
-      const raw = TikTabs.raw(p.tik, tab), shown = TikTabs.lines(p.tik, tab);
-      const Tag = tab === 2 || tab === 3 ? "ol" : "ul";
-      body = [h(Tag, { lang: lc(p.tik.lang) }, (tab === 2 || tab === 3 ? raw : shown).map((x, k) => h("li", {}, x, added.includes(raw[k]) ? h("span", { class: "tag" }, "New") : null))),
+      const isNew = (x) => (added.includes(x) ? h("span", { class: "tag" }, "New") : null);
+      // the TIK's own headings: level 1 is a section (Interest generation activity), 2 a topic or activity, 3 an activity under a topic
+      body = [TikTabs.blocks(p.tik, tab).map((b) => [b.heading ? h(`h${b.level + 2}`, { lang: lc(p.tik.lang) }, b.heading, isNew(b.heading)) : null,
+        b.lines.length ? h("ul", { lang: lc(p.tik.lang) }, b.lines.map((x) => h("li", {}, x, isNew(x)))) : null]),
         removed.length ? [h("h3", {}, "Removed in this version"), h("ul", { lang: lc(p.tik.lang) }, removed.map((x) => h("li", { class: "removed" }, x)))] : null];
     }
     const prev = (tab - 1 + titles.length) % titles.length, next = (tab + 1) % titles.length;

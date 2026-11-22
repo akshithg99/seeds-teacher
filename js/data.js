@@ -13,6 +13,21 @@ export const DemoAccounts = {
 };
 
 const t = (id, name, definitions, checkQuestions, syncedAudio = false) => ({ id, name, definitions, checkQuestions, syncedAudio });
+/** One activity in Vision Empower's TIK format. */
+export const act = (name, materials, prerequisites, objective, flow) => ({ name, materials, prerequisites, objective, flow });
+
+/** The lines at the top of every TIK, as in Vision Empower's format. */
+export const tikHeader = (ch, topic = null) => [`Syllabus: ${DemoAccounts.teachers[0].board}`, `Subject: ${ch.subject}`, `Grade: ${ch.classNum}`,
+  `Textbook name: Class ${ch.classNum} ${ch.subject} textbook (sample)`, `Chapter number and name: ${ch.number}. ${ch.name}`, ...(topic ? [`Topic: ${topic.name}`] : [])];
+
+/** Vision Empower's important guidelines for every TIK, with the accessibility rules every activity follows. */
+export const GUIDELINES = [
+  "Exercise reading: students re-read the new ideas in their accessible textbooks or other material they can use.",
+  "Perform textbook activities: practise the textbook's questions and activities, adapted where they are not accessible to students with visual impairment.",
+  "Provide homework: do one or two questions with the class, and give the rest for practice so students use their accessible books on their own.",
+  "Name each object aloud as you pass it, and give students time to explore it by touch.",
+  "Ask for answers aloud, one student at a time, so no one depends on seeing hands.",
+];
 
 const SUBJECT = "Science";
 
@@ -36,28 +51,43 @@ const chapters = [
     ],
     syncedTik: {
       provenance: "Synced from Content Studio", scope: "chapter", lang: "English",
-      objective: "Students identify magnetic materials, find the poles of a magnet and describe attraction and repulsion through touch and sound.",
-      steps: [
-        "Interest generation: pass a bar magnet and a steel spoon around the class. Ask each student to feel the pull.",
-        "Magnetic or not: students test objects from a tray, such as a pin, an eraser, a key, a paper clip and a pencil, and sort them into two boxes.",
-        "Poles: students slide a paper clip along a bar magnet and say where it holds on most strongly.",
-        "Attraction and repulsion: in pairs, students bring two ring magnets together and describe what they feel.",
-        "Let's discuss: where do we use magnets at home?",
+      objectives: ["To know which materials a magnet attracts.", "To find the poles of a magnet.", "To understand attraction and repulsion between two magnets."],
+      prerequisites: "Everyday objects made of iron, wood, plastic and paper, from earlier classes.",
+      keyPoints: [
+        "Magnetic and non-magnetic materials: a magnet attracts iron, nickel and cobalt. Wood, plastic and paper are not attracted.",
+        "Poles of a magnet: every magnet has a north pole and a south pole. Its pull is strongest at the poles.",
+        "Attraction and repulsion: unlike poles attract each other, and like poles push each other away.",
       ],
-      activities: [
-        "Sorting tray. Level 1: sort five objects. Level 2: predict before testing, then explain.",
-        "Pole hunt with paper clips.",
-        "Ring magnet push and pull, in pairs.",
+      learnMore: "",
+      interest: [act("Feel the pull", ["Bar magnet", "Steel spoon"], "Students should be able to handle the given material.", "",
+        ["Pass a bar magnet and a steel spoon around the class.", "Ask each student to bring them close and feel the pull.", "Ask: what do you think is happening? Take two or three answers aloud."])],
+      concepts: [
+        { topic: "Magnetic and non-magnetic materials", activities: [act("Magnetic or not", ["Bar magnets", "Tray of everyday objects: pin, eraser, key, paper clip, pencil", "Two boxes labelled in Braille and large print"],
+          "Students should be able to handle the given material.", "To know which materials a magnet attracts.",
+          ["Ask the students to form groups of three.", "Give each group a magnet and the tray of objects.", "Students test each object with the magnet and sort it into the two boxes.",
+            "Ask each group to share which objects stuck and which did not.", "From their responses, explain that a magnet attracts iron, nickel and cobalt, and that these are magnetic materials."])] },
+        { topic: "Poles of a magnet", activities: [act("Pole hunt", ["Bar magnets", "Paper clips"], "Know that a magnet attracts iron.", "To find where the pull of a magnet is strongest.",
+          ["Give each student a bar magnet and a paper clip.", "Students slide the paper clip slowly along the magnet from one end to the other.", "Ask: where does it hold on most strongly?",
+            "Explain that these places are the poles, a north pole and a south pole, and that the pull is strongest there."])] },
+        { topic: "Attraction and repulsion", activities: [act("Push and pull", ["Ring magnets"], "Know that a magnet has two poles.", "To understand attraction and repulsion.",
+          ["Ask the students to sit in pairs.", "Give each pair two ring magnets.", "Students bring the magnets together one way, then turn one over and try again.", "Ask them to describe what they feel each time.",
+            "Explain that unlike poles attract and like poles push each other away. This push is called repulsion."])] },
       ],
-      materials: ["Bar magnets", "Ring magnets", "Tray of everyday objects", "Two boxes labelled in Braille and large print"],
-      adaptations: [
-        "Every activity is done by touch. Name each object aloud as it is passed.",
-        "Use objects with clearly different textures.",
-        "Pair students so that each pair can describe what they feel to each other.",
-      ],
-      extension: "Magnet strength test: count how many paper clips each magnet can hold in a chain.",
-      sources: ["Content Studio: Exploring Magnets chapter TIK (sample)"],
+      exercises: [act("Magnet strength test", ["Magnets", "Paper clips"], "Know where the pull of a magnet is strongest.", "",
+        ["Divide the students into groups.", "Each group counts how many paper clips each magnet can hold in a chain.", "Groups say their counts aloud and compare which magnet is strongest."])],
+      references: ["Content Studio: Exploring Magnets chapter TIK (sample)"],
+      guidelines: GUIDELINES,
       reasoning: "Synced from Content Studio.", checks: [], instruction: null,
+    },
+    syncedQuiz: {
+      provenance: "Synced from Content Studio", lang: "English",
+      checks: "Whether students remember the key facts of Exploring Magnets: 4 multiple-choice questions. Students press the number of the right answer.",
+      questions: [
+        { q: "Which of these does a magnet attract?", options: ["A wooden pencil", "An iron nail", "A paper cup", "A plastic ruler"], answer: 1, topicId: "6-magnets-1" },
+        { q: "Which of these is a non-magnetic material?", options: ["Iron", "Nickel", "Plastic", "Cobalt"], answer: 2, topicId: "6-magnets-1" },
+        { q: "Where is the pull of a bar magnet strongest?", options: ["In the middle", "At its poles", "It is the same everywhere"], answer: 1, topicId: "6-magnets-2" },
+        { q: "What happens when the north poles of two magnets are brought together?", options: ["They attract", "They push each other away", "Nothing happens"], answer: 1, topicId: "6-magnets-3" },
+      ],
     },
   },
   {
@@ -123,23 +153,30 @@ const chapters = [
     ],
     syncedTik: {
       provenance: "Synced from Content Studio", scope: "chapter", lang: "English",
-      objective: "Students explain, with tactile and everyday examples, that matter is made of moving particles, and relate this to states of matter and evaporation.",
-      steps: [
-        "Interest generation: dissolve a spoon of salt in water. Students taste a drop and discuss where the salt went.",
-        "Particles: students shake a closed box of marbles gently and then hard, and describe the difference in movement.",
-        "States of matter: students feel a block of wood, a cup of water and a filled balloon, and describe shape and volume.",
-        "Evaporation: students wet the back of one hand and blow on it, and describe the cooling.",
-        "Let's discuss: why do we dry clothes in the sun and the wind?",
+      objectives: ["To know that matter is made of tiny moving particles.", "To understand the states of matter.", "To understand evaporation and why it causes cooling."],
+      prerequisites: "States of matter, solid, liquid and gas, from earlier classes.",
+      keyPoints: [
+        "Particles of matter: matter is made of very small particles with spaces between them. They keep moving and attract each other.",
+        "States of matter: solids have a fixed shape and volume. Liquids have a fixed volume but take the shape of their container. Gases have neither.",
+        "Evaporation: a liquid changes into vapour below its boiling point. Evaporation causes cooling.",
       ],
-      activities: [
-        "Marble box model. Level 1: describe the movement. Level 2: link it to solid, liquid and gas.",
-        "Shape and volume by touch.",
-        "Wet-hand evaporation test.",
+      learnMore: "",
+      interest: [act("Where did the salt go?", ["Salt", "Water", "Cups"], "Students should be able to handle the given material.", "",
+        ["Dissolve a spoon of salt in a cup of water.", "Students taste a drop of the water.", "Ask: where did the salt go? Take two or three answers aloud."])],
+      concepts: [
+        { topic: "Particles of matter", activities: [act("Marble box model", ["Closed box with marbles"], "Students should be able to handle the given material.", "To know that particles of matter keep moving.",
+          ["Give each group a closed box of marbles.", "Students shake it gently, then hard, and listen and feel.", "Ask them to describe the difference in movement.",
+            "Explain that particles of matter move all the time, faster when they have more energy."])] },
+        { topic: "States of matter", activities: [act("Shape and volume by touch", ["Wooden block", "Cup of water", "Filled balloon"], "Basic idea of solid, liquid and gas.", "To know the states of matter.",
+          ["Ask the students to form groups of three.", "Give each group a wooden block, a cup of water and a filled balloon.", "Students feel each one and describe its shape and volume.",
+            "From their responses, explain how solids, liquids and gases differ."])] },
+        { topic: "Evaporation", activities: [act("Wet-hand test", ["Water"], "Know that liquids can change into gas.", "To understand that evaporation causes cooling.",
+          ["Students wet the back of one hand.", "They blow on it gently.", "Ask: what do you feel?", "Explain that the water evaporates and takes heat from the hand, so it feels cool."])] },
       ],
-      materials: ["Salt, water and cups", "Closed box with marbles", "Wooden block, cup of water, balloon"],
-      adaptations: ["All observations are by touch, taste of a safe drop, and sound.", "Describe each step aloud before students try it."],
-      extension: "Students predict which dries faster, a wet cloth spread out or folded, and test it by touch the next day.",
-      sources: ["Content Studio: Matter in Our Surroundings chapter TIK (sample)"],
+      exercises: [act("Which dries faster?", ["Two wet cloths"], "Know what evaporation is.", "",
+        ["Spread one wet cloth out and fold the other.", "Students predict which will dry faster.", "The next day, students check both by touch and say what happened."])],
+      references: ["Content Studio: Matter in Our Surroundings chapter TIK (sample)"],
+      guidelines: GUIDELINES,
       reasoning: "Synced from Content Studio.", checks: [], instruction: null,
     },
   },

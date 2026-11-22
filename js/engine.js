@@ -27,7 +27,7 @@ export class Store {
 class Draft {
   constructor() {
     this.classNum = null; this.chapterId = null; this.topicId = null; this.lessonId = null;
-    this.sessionId = null; this.recordId = null; this.quizId = null; this.patternId = null;
+    this.sessionId = null; this.recordId = null; this.quizId = null; this.patternId = null; this.quizTopics = []; this.quizUntil = null;
     this.wsKind = null; this.wsItem = null;
     this.changeCount = 0; this.tries = 0; this.checkpointFor = "tik"; this.lcQueue = []; this.lcIndex = 0;
     this.audioClipId = null; this.justSignedIn = false; this.langFor = null; this.langNext = null;
@@ -35,13 +35,14 @@ class Draft {
   clearPlanning() {
     Object.assign(this, { classNum: null, chapterId: null, topicId: null, lessonId: null, changeCount: 0, tries: 0, audioClipId: null });
   }
-  snapshot() { const d = new Draft(); Object.assign(d, this, { lcQueue: [...this.lcQueue] }); return d; }
-  restore(o) { Object.assign(this, o, { lcQueue: [...o.lcQueue], justSignedIn: false }); }
+  snapshot() { const d = new Draft(); Object.assign(d, this, { lcQueue: [...this.lcQueue], quizTopics: [...this.quizTopics] }); return d; }
+  restore(o) { Object.assign(this, o, { lcQueue: [...o.lcQueue], quizTopics: [...(o.quizTopics || [])], justSignedIn: false }); }
 }
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const hash = (v) => { const s = JSON.stringify(v) || ""; let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const WEAK_PCT = 30; // a topic needs reinforcement when at least this share of its quiz answers were wrong
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
@@ -364,7 +365,7 @@ export class Engine {
         if (a) { this.draft.sessionId = a.id; this.draft.lessonId = a.lessonId; this.go("teach_step"); } else this.go("teach_pick");
         break;
       }
-      case "QUIZ": this.go("quiz_pick"); break;
+      case "QUIZ": this.go("quiz_home"); break;
       case "FOLLOWUP": this.go("followups"); break;
       case "WORKSPACE": this.go("workspace"); break;
       default: this.goHome();
@@ -395,7 +396,7 @@ export class Engine {
         else { notes.push(`No lesson is ready to teach${classNum != null ? ` for class ${classNum}` : ""}.`); this.go("home"); }
         break;
       }
-      case "quiz": this.go("quiz_pick"); break;
+      case "quiz": if (classNum != null) { d.classNum = classNum; caught.push(`class ${classNum}`); this.go("quiz_chapter"); } else this.go("quiz_home"); break;
       default: {
         d.lessonId = null;
         if (classNum != null) { d.classNum = classNum; caught.push(`class ${classNum}`, "science"); }
@@ -574,7 +575,7 @@ export class Engine {
    */
   workspace() {
     const tiks = [], audio = [], quizzes = [];
-    const QUIZ_STATUS = { Draft: "Not approved yet", Approved: "Approved", Live: "Open for students", Closed: "Closed" };
+    const QUIZ_STATUS = { Draft: "Not approved yet", Approved: "Approved, not shared yet", Live: "Shared to IVR", Closed: "Closed, results ready" };
     for (const ch of Curriculum.chapters) {
       const where = `Class ${ch.classNum} ${ch.subject}, ${ch.name}`;
       if (ch.syncedTik) tiks.push({ key: `cs:${ch.id}`, fromCS: true, title: `${where}: chapter TIK`, tik: ch.syncedTik, status: "Ready to use", lang: ch.syncedTik.lang });
@@ -587,7 +588,10 @@ export class Engine {
       }
       for (const a of l.audio) if (!a.provenance.startsWith("Synced")) audio.push({ key: `a:${a.id}`, fromCS: false, title: `${this.lessonName(l)}: ${a.name}`, clip: a, status: a.approved ? "Approved" : "Not approved yet", lang: a.lang });
     }
-    for (const q of this.st.quizzes) quizzes.push({ key: `q:${q.id}`, fromCS: false, title: `${this.lessonName(this.lesson(q.lessonId))}: quiz`, quiz: q, status: QUIZ_STATUS[q.state] || q.state, lang: q.lang });
+    for (const ch of Curriculum.chapters) if (ch.syncedQuiz && !this.st.quizzes.some((q) => q.csKey === ch.id)) {
+      quizzes.push({ key: `csq:${ch.id}`, fromCS: true, catalog: true, title: `Class ${ch.classNum} ${ch.subject}, ${ch.name}: quiz`, quiz: ch.syncedQuiz, status: "Ready to use", lang: ch.syncedQuiz.lang });
+    }
+    for (const q of this.st.quizzes) quizzes.push({ key: `q:${q.id}`, fromCS: q.provenance.startsWith("Synced"), title: `${this.quizName(q)}: quiz`, quiz: q, status: QUIZ_STATUS[q.state] || q.state, lang: q.lang });
     return { tiks, audio, quizzes };
   }
   workspaceItem(key) { const w = this.workspace(); return [...w.tiks, ...w.audio, ...w.quizzes].find((x) => x.key === key) || null; }
@@ -602,12 +606,62 @@ export class Engine {
     const rec = [...this.st.records].reverse().find((x) => x.sessionId === sessionId && x.saved);
     const note = rec && rec.notes.find((n) => /difficult/i.test(n));
     if (note) signals.push(`You noted: "${note.slice(0, 80)}"`);
-    const q = [...this.st.quizzes].reverse().find((x) => x.lessonId === lessonId && x.state === "Closed" && x.wrongPct >= 20);
-    if (q) signals.push(`${q.wrongPct}% of quiz answers were wrong`);
     if (!signals.length) return;
-    const existing = this.st.patterns.find((p) => p.lessonId === lessonId && (p.state === "Proposed" || p.state === "Confirmed"));
+    this.addPattern(tp, l.classNum, lessonId, signals);
+  }
+
+  /** One follow-up per concept, for the class as a whole: new signals join an open one (v5.4 8.8). */
+  addPattern(tp, classNum, lessonId, signals) {
+    const existing = this.st.patterns.find((p) => (p.topicId === tp.id || (lessonId && p.lessonId === lessonId)) && (p.state === "Proposed" || p.state === "Confirmed"));
     if (existing) this.updatePattern(existing.id, (p) => ({ ...p, signals: [...new Set([...p.signals, ...signals])] }));
-    else this.store.update((x) => ({ ...x, patterns: [...x.patterns, { id: this.newId(), lessonId, concept: tp.name, signals, state: "Proposed", followUp: null }] }));
+    else this.store.update((x) => ({ ...x, patterns: [...x.patterns, { id: this.newId(), lessonId, topicId: tp.id, classNum, concept: tp.name, signals, state: "Proposed", followUp: null }] }));
+  }
+
+  /** A closed quiz proposes a follow-up for each topic where many answers were wrong. */
+  proposeFromQuiz(q) {
+    const s = this.quizStats(q);
+    if (!s) return;
+    for (const w of s.weak) {
+      const tp = Curriculum.topic(w.id);
+      const lesson = [...this.st.lessons].reverse().find((l) => l.topicId === w.id && !l.followUpFor);
+      this.addPattern(tp, q.classNum, lesson ? lesson.id : null, [`Quiz: ${w.wrongPct}% of the answers on ${tp.name} were wrong`]);
+    }
+  }
+
+  /** Quiz results for the class as a whole: overall and per topic. Null until the quiz has answers. */
+  quizStats(q) {
+    if (!q || !q.responses) return null;
+    const topics = [...new Set(q.questions.map((x) => x.topicId).filter(Boolean))].map((id) => {
+      const idx = q.questions.map((x, i) => (x.topicId === id ? i : -1)).filter((i) => i >= 0);
+      const right = idx.reduce((a, i) => a + (q.perQuestionCorrect[i] || 0), 0);
+      return { id, name: (Curriculum.topic(id) || {}).name || id, wrongPct: Math.round(100 - (100 * right) / (q.responses * idx.length)) };
+    });
+    return { responses: q.responses, wrongPct: q.wrongPct, topics, weak: topics.filter((x) => x.wrongPct >= WEAK_PCT) };
+  }
+
+  quizName(q) {
+    const ch = Curriculum.chapter(q.chapterId);
+    if (!ch) return "Quiz";
+    const all = q.topicIds.length === ch.topics.length;
+    return `Class ${ch.classNum} ${ch.subject}, ${ch.name}` + (all ? "" : `: ${q.topicIds.map((id) => (Curriculum.topic(id) || {}).name).join(", ")}`);
+  }
+
+  quizKnown(q) {
+    const ch = q && Curriculum.chapter(q.chapterId);
+    if (!ch) return [];
+    return [["Class", `${ch.classNum}`], ["Chapter", `${ch.number}. ${ch.name}`],
+      ["Covers", q.topicIds.length === ch.topics.length ? "The whole chapter" : q.topicIds.map((id) => (Curriculum.topic(id) || {}).name).join(", ")], ["From", q.provenance]];
+  }
+
+  async makeQuiz() {
+    const ch = Curriculum.chapter(this.draft.chapterId);
+    const topics = ch.topics.filter((t) => this.draft.quizTopics.includes(t.id));
+    const r = await this.working("Drafting a quiz…", () => this.gen.quiz(ch, topics, this.classLang(ch.classNum)));
+    if (!r) return this.failed("draft the quiz");
+    const q = this.newQuiz(ch, topics.map((t) => t.id), r, "Generated by SEEDS PROJECT-B");
+    this.draft.quizId = q.id;
+    this.go("quiz_review");
+    return `Here is a draft quiz with ${q.questions.length} multiple-choice questions and an answer key.` + this.langNote(ch.classNum, r.lang);
   }
 
   finishSession() {
@@ -622,8 +676,6 @@ export class Engine {
       ended.coverage === "all" ? "Coverage: all planned topics covered." : `Coverage: some covered (${this.coveredText(ended)}). Reason: ${ended.reason || "not given"}.`];
     if (ended.extensionUsed) facts.push("Extension activity used.");
     Object.entries(ended.checkResults).forEach(([k, v]) => facts.push(`Learning check, ${k === "overview" ? "overview" : (Curriculum.topic(k) || {}).name || k}: ${v}.`));
-    const q = [...this.st.quizzes].reverse().find((x) => x.lessonId === s.lessonId && x.state === "Closed");
-    if (q) facts.push(`Quiz: ${q.responses} students answered, ${q.wrongPct}% of answers wrong.`);
     const rec = { id: this.newId(), sessionId: s.id, lessonId: s.lessonId, createdAt: this.now(), prefilled: facts, notes: [], summary: "", previewed: false, saved: false };
     this.store.update((x) => ({ ...x, records: [...x.records, rec] }));
     this.draft.recordId = rec.id;
@@ -675,7 +727,7 @@ export class Engine {
           case "next_topic": this.go("next_class"); break;
           case "teach_pick": this.go("teach_pick"); break;
           case "awaiting": this.go("awaiting"); break;
-          case "quiz": this.go("quiz_pick"); break;
+          case "quiz": this.go("quiz_home"); break;
           case "followups": this.go("followups"); break;
           case "menu": this.go("menu"); break;
           case "workspace": this.go("workspace"); break;
@@ -696,13 +748,22 @@ export class Engine {
         }
         if (c === "stop") { this.audio.stop(); return "Stopped."; }
         if (c === "ws_back") { this.audio.stop(); this.go("ws_list"); }
+        if (c === "use_quiz" && x && x.catalog) {
+          const chx = Curriculum.chapter(d.wsItem.slice(4));
+          const q = this.newQuiz(chx, chx.topics.map((t) => t.id), chx.syncedQuiz, chx.syncedQuiz.provenance);
+          d.quizId = q.id; this.go("quiz_review");
+        }
+        if (["review_quiz", "share_quiz", "live_quiz"].includes(c) && x && x.quiz) {
+          d.quizId = x.quiz.id;
+          this.go({ review_quiz: "quiz_review", share_quiz: "quiz_window", live_quiz: "quiz_live" }[c]);
+        }
         break;
       }
 
       case "awaiting": {
         const [kind, id] = [c.split(":")[0], c.split(":").slice(1).join(":")];
         if (kind === "l") { d.lessonId = id; const lx = this.lesson(); if (lx) this.go(this.nextPlanningStep(lx)); }
-        if (kind === "q") { d.quizId = id; d.lessonId = (this.st.quizzes.find((q) => q.id === id) || {}).lessonId; this.go("quiz_review"); }
+        if (kind === "q") { d.quizId = id; this.go("quiz_review"); }
         if (kind === "r") { d.recordId = id; this.go("record_draft"); }
         if (kind === "p") { d.patternId = id; d.lessonId = (this.st.patterns.find((p) => p.id === id) || {}).lessonId; this.go("followup_pattern"); }
         break;
@@ -944,7 +1005,7 @@ export class Engine {
         if (c === "all") {
           this.updateSession(s.id, (x) => ({ ...x, coverage: "all", covered: ["overview", l.topicId] }));
           const elapsedMin = Math.floor((this.now() - s.startedAt) / 60000);
-          if (l.tik && l.tik.extension && elapsedMin < PLANNED_MINUTES) { this.go("early_finish"); return ""; }
+          if (l.tik && TikTabs.extension(l.tik) && elapsedMin < PLANNED_MINUTES) { this.go("early_finish"); return ""; }
           return this.startLearningCheck();
         }
         if (c === "some") this.go("end_partial");
@@ -1007,43 +1068,59 @@ export class Engine {
         break;
       case "record_saved": if (c === "followups") this.go("followups"); break;
 
-      // ---------------- F8 Assessment/Quiz
-      case "quiz_pick": {
-        if (c === "plan") { d.clearPlanning(); this.go("plan_class"); return ""; }
-        d.lessonId = c.slice(2);
-        const lx = this.lesson();
-        const existing = [...this.st.quizzes].reverse().find((q) => q.lessonId === lx.id);
-        if (existing) {
-          d.quizId = existing.id;
-          this.go({ Live: "quiz_live", Closed: "quiz_results", Approved: "quiz_window" }[existing.state] || "quiz_review");
-          return "";
-        }
-        const r = await this.working("Drafting a quiz…", () => this.gen.quiz(this.chapterOf(lx), this.topicOf(lx), this.classLang(lx.classNum)));
-        if (!r) return this.failed("draft the quiz");
-        const q = this.newQuiz(lx.id, r, "Generated for this lesson");
+      // ---------------- F8 Assessment/Quiz (v5.4 8.6)
+      case "quiz_home":
+        if (c === "plan") { d.clearPlanning(); this.go("quiz_class"); }
+        if (c === "mine") { d.wsKind = "quizzes"; this.go("ws_list"); }
+        break;
+      case "quiz_class": d.classNum = parseInt(c.slice(1), 10); d.chapterId = null; this.go("quiz_chapter"); break;
+      case "quiz_chapter": {
+        d.chapterId = c; d.quizTopics = [];
+        this.go(Curriculum.chapter(c).syncedQuiz ? "quiz_source" : "quiz_scope");
+        break;
+      }
+      case "quiz_source": {
+        const chx = Curriculum.chapter(d.chapterId);
+        if (c === "make") { this.go("quiz_scope"); break; }
+        const q = this.newQuiz(chx, chx.topics.map((x) => x.id), chx.syncedQuiz, chx.syncedQuiz.provenance);
         d.quizId = q.id;
         this.go("quiz_review");
-        return "There is no quiz from Content Studio for this topic, so I drafted one." + this.langNote(lx.classNum, r.lang);
+        return "Here is the quiz from Content Studio, with its answer key." + this.langNote(chx.classNum, q.lang, true);
       }
+      case "quiz_scope":
+        if (c === "chapter") { d.quizTopics = Curriculum.chapter(d.chapterId).topics.map((x) => x.id); return this.makeQuiz(); }
+        if (c === "topics") { d.quizTopics = []; this.go("quiz_topics"); }
+        break;
+      case "quiz_topics":
+        if (c === "make") return this.makeQuiz();
+        d.quizTopics = d.quizTopics.includes(c) ? d.quizTopics.filter((x) => x !== c) : [...d.quizTopics, c];
+        this.refresh();
+        return `${(Curriculum.topic(c) || {}).name} ${d.quizTopics.includes(c) ? "added" : "taken out"}.`;
       case "quiz_review": {
         const q = this.st.quizzes.find((x) => x.id === d.quizId);
         if (c === "approve") { this.updateQuiz(q.id, (x) => ({ ...x, state: "Approved" })); this.go("quiz_window"); return "Quiz approved."; }
+        if (c === "share") { this.go("quiz_window"); break; }
         if (c === "hear") return spoken(this.step, true, false);
         if (c === "regenerate") {
-          const lx = this.lesson(q.lessonId);
-          const r = await this.working("Drafting a new quiz…", () => this.gen.quiz(this.chapterOf(lx), this.topicOf(lx), this.classLang(lx.classNum)));
+          const chx = Curriculum.chapter(q.chapterId);
+          const r = await this.working("Drafting a new quiz…", () => this.gen.quiz(chx, q.topicIds.map((id) => Curriculum.topic(id)), this.classLang(chx.classNum)));
           if (!r) return this.failed("draft the quiz");
           this.updateQuiz(q.id, (x) => ({ ...x, checks: r.checks, questions: r.questions, lang: r.lang, state: "Draft" }));
           return "Here is a new draft.";
         }
         break;
       }
-      case "quiz_window": {
-        const until = { tomorrow: "tomorrow evening", friday: "Friday evening" }[c] || "in three days";
+      case "quiz_window":
+        d.quizUntil = { tomorrow: "tomorrow evening", friday: "Friday evening" }[c] || "three days from now";
+        this.go("quiz_share");
+        break;
+      case "quiz_share": {
+        if (c === "when") { this.go("quiz_window"); break; }
+        const until = d.quizUntil || "Friday evening";
         this.updateQuiz(d.quizId, (x) => ({ ...x, state: "Live", openUntil: until, openedAt: this.now() }));
-        this.log("quiz_window", c, source, until);
+        this.log("quiz_share", d.quizId, source, until);
         this.go("quiz_live");
-        return `The quiz is live until ${until}.`;
+        return `Shared to IVR until ${until}. Only the questions were sent.`;
       }
       case "quiz_live":
         if (c === "refresh") { this.refresh(); return `Responses so far: ${this.simulatedResponses(this.st.quizzes.find((x) => x.id === d.quizId))}.`; }
@@ -1056,10 +1133,10 @@ export class Engine {
           const wrongPct = Math.round(100 - (100 * correct.reduce((a, b) => a + b, 0)) / (responses * q.questions.length));
           this.updateQuiz(q.id, (x) => ({ ...x, state: "Closed", responses, perQuestionCorrect: correct, wrongPct }));
           const before = this.st.patterns.length;
-          const lastSession = [...this.st.sessions].reverse().find((s) => s.lessonId === q.lessonId);
-          this.proposePatterns(q.lessonId, lastSession && lastSession.id);
+          this.proposeFromQuiz(this.st.quizzes.find((x) => x.id === q.id));
           this.go("quiz_results");
-          return "Quiz closed. No more answers are accepted." + (this.st.patterns.length > before ? " One follow-up suggestion is waiting." : "");
+          const n = this.st.patterns.length - before;
+          return "Quiz closed. No more answers are accepted." + (n ? ` ${n === 1 ? "One follow-up suggestion is" : `${n} follow-up suggestions are`} waiting.` : "");
         }
         break;
       case "quiz_results": if (c === "followups") this.go("followups"); break;
@@ -1081,7 +1158,7 @@ export class Engine {
       case "followup_change": if (c === "back") this.go("followup_pattern"); break;
       case "followup_type": {
         const p = this.st.patterns.find((x) => x.id === d.patternId);
-        const base = this.lesson(p.lessonId);
+        const base = this.lesson(p.lessonId) || this.topicLesson(p.topicId);
         const lang = this.classLang(base.classNum);
         if (c === "tik") {
           const instr = `A simpler version for a class that has not yet understood ${p.concept}.`;
@@ -1095,10 +1172,9 @@ export class Engine {
           return "A simpler TIK is ready for your review." + this.langNote(base.classNum, t.lang);
         }
         if (c === "quiz") {
-          d.lessonId = base.id;
-          const r = await this.working("Drafting a follow-up quiz…", () => this.gen.quiz(this.chapterOf(base), this.topicOf(base), lang));
+          const r = await this.working("Drafting a follow-up quiz…", () => this.gen.quiz(this.chapterOf(base), [this.topicOf(base)], lang));
           if (!r) return this.failed("draft the quiz");
-          const q = this.newQuiz(base.id, r, "Generated for this follow-up");
+          const q = this.newQuiz(this.chapterOf(base), [base.topicId], r, "Generated by SEEDS PROJECT-B for a follow-up");
           this.updatePattern(p.id, (x) => ({ ...x, followUp: "Quiz" }));
           d.quizId = q.id;
           this.go("quiz_review");
@@ -1110,8 +1186,16 @@ export class Engine {
     return "";
   }
 
-  newQuiz(lessonId, r, provenance) {
-    const q = { id: this.newId(), lessonId, checks: r.checks, questions: r.questions, lang: r.lang || "English", provenance, state: "Draft",
+  /** The fields a lesson for this topic would have, for a follow-up that started from a quiz. */
+  topicLesson(topicId) {
+    const ch = Curriculum.chapterOfTopic(topicId);
+    return { id: null, classNum: ch.classNum, subject: ch.subject, chapterId: ch.id, topicId, tik: null };
+  }
+
+  /** A quiz for a chapter, or some of its topics: multiple choice, with an answer key that is never sent (v5.4 8.6). */
+  newQuiz(ch, topicIds, r, provenance) {
+    const q = { id: this.newId(), classNum: ch.classNum, chapterId: ch.id, topicIds, csKey: provenance.startsWith("Synced") ? ch.id : null,
+      checks: r.checks, questions: r.questions, lang: r.lang || "English", provenance, state: "Draft",
       openUntil: null, openedAt: null, responses: 0, perQuestionCorrect: [], wrongPct: 0, classSize: 12 };
     this.store.update((x) => ({ ...x, quizzes: [...x.quizzes, q] }));
     return q;

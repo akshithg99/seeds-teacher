@@ -1,20 +1,28 @@
 import { inLang } from "./step.js";
 
 /**
- * The TIK split into tabs, like browser tabs: a Summary tab first, then one tab per section.
- * The same tabs every time, in the same order, so a teacher always knows where a section is.
+ * A TIK in Vision Empower's Teacher Instruction Kit format, split into tabs like browser tabs:
+ * a Summary tab first, then one tab per heading of the format, always in the same order.
+ *
+ * TIK: { provenance, scope, lang, header: [string], objectives: [string], prerequisites,
+ *        keyPoints: [string], learnMore, interest: [activity], concepts: [{ topic, activities: [activity] }],
+ *        exercises: [activity], references: [string], guidelines: [string], reasoning, checks, instruction }
+ * activity: { name, materials: [string], prerequisites, objective, flow: [string] }
  * A panel is { tik, before, suggestions: [string], status }.
  */
+const uniq = (xs) => [...new Set(xs)];
+
 export const TikTabs = {
-  titles: ["Summary", "Objective", "Steps", "Activities", "Materials", "Accessibility", "Extension", "Sources", "Why"],
+  titles: ["Summary", "Overview", "Learn", "Engage", "Exercises", "References", "Guidelines", "Why"],
 
   names: {
-    summary: 0, overview: 0, objective: 1, objectives: 1, goal: 1, steps: 2, "teaching steps": 2,
-    activities: 3, activity: 3, materials: 4, material: 4, accessibility: 5, adaptations: 5,
-    extension: 6, sources: 7, source: 7, why: 8, reasoning: 8, reasons: 8,
+    summary: 0, overview: 1, objective: 1, objectives: 1, prerequisites: 1, learn: 2, "key points": 2,
+    engage: 3, activities: 3, activity: 3, "interest generation": 3, "concept generation": 3,
+    exercises: 4, reinforcement: 4, "exercises and reinforcement": 4, extension: 4,
+    references: 5, sources: 5, guidelines: 6, "important guidelines": 6, accessibility: 6, why: 7, reasoning: 7,
   },
 
-  /** "open the activities tab", "activities tab", "show materials" -> 3, 4. Null if it is not a tab request. */
+  /** "open the engage tab", "engage tab", "show references" -> 3, 5. Null if it is not a tab request. */
   parse(text) {
     const t = text.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
     let core = t;
@@ -23,48 +31,61 @@ export const TikTabs = {
     core = core.trim();
     const named = this.names[core];
     if (named === undefined) return null;
-    // a bare word like "steps" only counts when it was said as a tab request or on its own
+    // a bare word like "activities" only counts when it was said as a tab request or on its own
     const asked = t.includes("tab") || t.includes("section") || t === core || /^(open|go to|show|read)/.test(t);
     return asked ? named : null;
   },
 
-  /** Raw lines of one section tab (1..8), unnumbered, used for comparing versions. */
-  raw(t, i) {
+  // ---------------------------------------------------------------- the TIK's activities
+  /** Activities taught in class, in order: interest generation, then concept generation. */
+  activities: (t) => [...(t.interest || []), ...(t.concepts || []).flatMap((c) => c.activities)],
+  /** Materials to gather before class, from every activity. */
+  materials: (t) => uniq([...TikTabs.activities(t), ...(t.exercises || [])].flatMap((a) => a.materials)).filter((m) => m && !/^none$/i.test(m)),
+  /** Exercises and reinforcement: offered when the class finishes early (v5.4 8.5). */
+  extension: (t) => (t.exercises && t.exercises[0]) || null,
+  /** One activity as a sentence, for speech. */
+  actText: (a) => `${a.name}. ${a.flow.join(" ")}`,
+
+  /** The headed blocks of one tab (1..7): [{ heading, level, lines }]. Activities are numbered through the TIK. */
+  blocks(t, i) {
+    let n = 0;
+    const act = (a, level) => ({ heading: `Activity ${++n}: ${a.name}`, level, lines: [
+      `Materials required: ${a.materials.length ? a.materials.join(", ") : "None"}`, `Prerequisites: ${a.prerequisites || "None"}`,
+      ...(a.objective ? [`Objective: ${a.objective}`] : []), "Activity flow:", ...a.flow.map((s, k) => `${k + 1}. ${s}`)] });
     switch (i) {
-      case 1: return [t.objective];
-      case 2: return t.steps;
-      case 3: return t.activities;
-      case 4: return t.materials;
-      case 5: return t.adaptations;
-      case 6: return t.extension ? [t.extension] : [];
-      case 7: return t.sources || [];
-      case 8: return [t.reasoning].filter((x) => x && x.trim()).concat(t.checks || []);
+      case 1: return [{ heading: null, level: 1, lines: t.header || [] }, { heading: "Objectives", level: 1, lines: t.objectives },
+        { heading: "Prerequisite concept", level: 1, lines: [t.prerequisites || "None"] }];
+      case 2: return [{ heading: "Key points", level: 1, lines: t.keyPoints.map((k, j) => `${j + 1}. ${k}`) },
+        { heading: "Learn more", level: 1, lines: [t.learnMore || "None"] }];
+      case 3: {
+        const out = [{ heading: "Interest generation activity", level: 1, lines: [] }, ...t.interest.map((a) => act(a, 2)), { heading: "Concept generation activity", level: 1, lines: [] }];
+        t.concepts.forEach((c) => { out.push({ heading: c.topic, level: 2, lines: [] }, ...c.activities.map((a) => act(a, 3))); });
+        return out;
+      }
+      case 4: n = this.activities(t).length; return t.exercises.length ? t.exercises.map((a) => act(a, 1)) : [{ heading: null, level: 1, lines: ["None yet."] }];
+      case 5: return [{ heading: null, level: 1, lines: t.references.length ? t.references : ["None listed."] }];
+      case 6: return [{ heading: null, level: 1, lines: t.guidelines.length ? t.guidelines : ["None listed."] }];
+      case 7: return [{ heading: null, level: 1, lines: [t.reasoning].filter((x) => x && x.trim()).concat(t.checks || []) }];
       default: return [];
     }
   },
 
-  /** Lines as shown and read aloud. Steps are numbered so "remove step 2" is unambiguous. */
-  lines(t, i) {
-    if (i === 2) return t.steps.map((s, n) => `${n + 1}. ${s}`);
-    if (i === 3) return t.activities.map((s, n) => `${n + 1}. ${s}`);
-    if (i === 6) return [t.extension || "None yet."];
-    const r = this.raw(t, i);
-    return r.length ? r : ["None listed."];
-  },
+  /** Lines of one tab as read aloud and compared between versions: each heading, then its lines. */
+  lines(t, i) { return this.blocks(t, i).flatMap((b) => [b.heading, ...b.lines]).filter(Boolean); },
 
   /** Per teaching-content tab (1..6): lines added and removed since `before`. Map of tab -> [added, removed]. */
   changes(before, after) {
     const out = new Map();
     if (!before) return out;
     for (let i = 1; i <= 6; i++) {
-      const a = this.raw(before, i), b = this.raw(after, i);
+      const a = this.lines(before, i), b = this.lines(after, i);
       const added = b.filter((x) => !a.includes(x)), removed = a.filter((x) => !b.includes(x));
       if (added.length || removed.length) out.set(i, [added, removed]);
     }
     return out;
   },
 
-  /** One short sentence for feedback after a change, for example "Steps: 1 added. Activities: 2 changed." */
+  /** One short sentence for feedback after a change, for example "Engage: 1 added. Learn: 2 changed." */
   changeText(before, after) {
     const c = this.changes(before, after);
     if (!c.size) return "";
@@ -81,11 +102,10 @@ export const TikTabs = {
   /** The Summary tab: what is in the TIK, what changed, and what is suggested. */
   summary(p) {
     const t = p.tik;
-    const levelled = t.activities.filter((a) => a.includes("Level 1")).length;
     const inside = { heading: "In this TIK", lines: [
       `${t.provenance} · ${t.scope} TIK · ${p.status}` + (t.lang && t.lang !== "English" ? ` · ${t.lang}` : ""),
-      `${t.steps.length} steps, ${t.activities.length} activities (${levelled} with two levels), ${t.materials.length} materials`,
-      `Extension activity: ${t.extension ? "yes" : "none"}`,
+      `${t.objectives.length} objectives, ${t.keyPoints.length} key points, ${this.activities(t).length} activities for ${t.concepts.length} ${t.concepts.length === 1 ? "topic" : "topics"}, ${this.materials(t).length} materials`,
+      `Exercises and reinforcement: ${t.exercises.length ? `${t.exercises.length} ${t.exercises.length === 1 ? "activity" : "activities"}` : "none"}`,
     ] };
     const c = this.changes(p.before, t);
     let changedLines;
@@ -104,7 +124,7 @@ export const TikTabs = {
     const head = `${this.titles[i]} tab, ${i + 1} of ${this.titles.length}.`;
     const body = i === 0
       ? this.summary(p).map((s) => s.heading + ". " + s.lines.map((l) => l.replace(/\.+$/, "")).join(". ") + ".").join(" ")
-      : inLang(p.tik.lang, this.lines(p.tik, i).map((l) => l.replace(/\.+$/, "") + ".").join(" "));
+      : inLang(p.tik.lang, this.lines(p.tik, i).map((l) => l.replace(/[.:]+$/, "") + ".").join(" "));
     return `${head} ${body}`;
   },
 };
