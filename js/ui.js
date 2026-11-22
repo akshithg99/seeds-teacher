@@ -21,7 +21,7 @@ const svg = (path) => { const s = document.createElementNS("http://www.w3.org/20
 const ICON = {
   back: '<path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
-  gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M5.5 18.5l2.1-2.1M16.4 7.6l2.1-2.1" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
+  gear: '<path d="M18.93 10.05L21.47 10.45L21.47 13.55L18.93 13.95L18.28 15.53L19.79 17.60L17.60 19.79L15.53 18.28L13.95 18.93L13.55 21.47L10.45 21.47L10.05 18.93L8.47 18.28L6.40 19.79L4.21 17.60L5.72 15.53L5.07 13.95L2.53 13.55L2.53 10.45L5.07 10.05L5.72 8.47L4.21 6.40L6.40 4.21L8.47 5.72L10.05 5.07L10.45 2.53L13.55 2.53L13.95 5.07L15.53 5.72L17.60 4.21L19.79 6.40L18.28 8.47Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/>',
   home: '<path d="M4 11l8-6.5 8 6.5V20h-5.5v-5.5h-5V20H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
