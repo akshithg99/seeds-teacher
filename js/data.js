@@ -56,7 +56,7 @@ const chapters = [
       t("6-diversity-2", "Leaves and roots", ["Some leaves have veins in a net-like pattern; others have veins running side by side.", "Some plants have one main tap root; others have many thin fibrous roots."], ["What kind of roots does grass have?"]),
       t("6-diversity-3", "Animals and their habitats", ["The place where a plant or animal lives is its habitat.", "Animals have features that help them live in their habitat, such as the camel's long legs in the desert."], ["How does a fish's body help it live in water?"]),
     ],
-    audio: csAudio("c6-science-2.mp3", 63),
+    audio: csAudio("c6-science-2.mp3", 64),
   },
   {
     id: "6-eating", classNum: 6, subject: SUBJECT, number: 3, name: "Mindful Eating: A Path to a Healthy Body",
