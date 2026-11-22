@@ -405,7 +405,7 @@ export class VoiceOrchestrator {
         reply = e.command(intent.name, Source.VOICE);
       } else if (intent.type === "choose") reply = this.afterAction(await e.choose(intent.choiceId, Source.VOICE));
       else if (intent.type === "goto") reply = await e.goTo(intent.flow, Source.VOICE);
-      else if (intent.type === "open") reply = await e.fillDetails(intent.intent, intent.classNum, intent.chapter, null, Source.VOICE);
+      else if (intent.type === "open") reply = await e.fillDetails(intent.intent, intent.classNum, intent.chapter, null, Source.VOICE, intent.subject);
       else if (intent.type === "confirm") reply = this.afterAction(await e.confirmPending(Source.VOICE, text));
       else if (intent.type === "cancel") reply = e.cancelPending() + " " + e.step.question;
       if (reply != null) {
@@ -466,7 +466,7 @@ export class VoiceOrchestrator {
     e.log("voice_turn", null, Source.VOICE, `offline, ${secs.toFixed(1)} s of speech`);
     let reply = null;
     if (step.freeSpeech) reply = this.afterAction(await e.submitText(text, Source.VOICE));
-    else { const o = opening(text); if (o) reply = await e.fillDetails(o.intent, o.classNum, o.chapter, null, Source.VOICE); }
+    else { const o = opening(text); if (o) reply = await e.fillDetails(o.intent, o.classNum, o.chapter, null, Source.VOICE, o.subject); }
     if (reply == null) this.onMiss(false); else { this.misses = 0; this.speak(reply, true); }
   }
 

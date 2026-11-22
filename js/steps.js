@@ -37,7 +37,7 @@ function historySuggestion(e, stepId, choices) {
 }
 
 const TIK_HELP = `The TIK has tabs: ${TikTabs.titles.slice(0, -1).join(", ")} and Why. Say next tab, previous tab, or a tab's name.`;
-const chapterKnown = (chx) => [["Class", `${chx.classNum}`], ["Subject", "Science"], ["Chapter", `${chx.number}. ${chx.name}`]];
+const chapterKnown = (chx) => [["Class", `${chx.classNum}`], ["Subject", chx.subject], ["Chapter", `${chx.number}. ${chx.name}`]];
 /** Quiz questions as sent by IVR ("Press 1: ..."); with key, the right answer is marked for the teacher. */
 const quizQuestions = (e, q, key) => q.questions.map((y, i) => section(`Question ${i + 1}` + (y.topicId && Curriculum.topic(y.topicId) ? ` · ${Curriculum.topic(y.topicId).name}` : ""),
   [y.q, ...y.options.map((o, k) => `Press ${k + 1}: ${o}` + (key && k === y.answer ? " (answer)" : ""))], { lang: q.lang }));
@@ -149,14 +149,21 @@ export function buildStep(e) {
     }
 
     case "next_class":
-      return makeStep("next_class", Flow.PLAN, "What to teach next", "You don't have a plan yet. Which class and subject?",
-        Curriculum.coveredClasses.map((c) => choice(`c${c}`, `Class ${c} science`, { words: [`class ${c}`, `${c}`, numberWord(c), `grade ${c}`] })), { secondary: [homeBtn()] });
+      return makeStep("next_class", Flow.PLAN, "What to teach next", "You don't have a plan yet. Which class?", classChoices(), { secondary: [homeBtn()] });
+
+    // asked right after the class, wherever a class is chosen (plan, what to teach next, quiz)
+    case "pick_subject": {
+      const quiz = d.subjectNext === "quiz_chapter";
+      return makeStep("pick_subject", quiz ? Flow.QUIZ : Flow.PLAN, quiz ? "Plan a quiz" : "Subject", `Which subject for class ${d.classNum}?`,
+        Curriculum.subjects.map((s) => choice(s, s, { words: [s.toLowerCase(), ...(s === "Maths" ? ["math", "mathematics"] : [])] })),
+        { known: [["Class", `${d.classNum}`]], secondary: [homeBtn()], ...(quiz ? {} : { progress: planProgress(0) }) });
+    }
 
     case "next_chapter": {
-      const n = e.nextChapter(d.classNum);
+      const n = e.nextChapter(d.classNum, d.subject);
       return makeStep("next_chapter", Flow.PLAN, "What to teach next", `Start with chapter ${n.number}, ${n.name}, or tell me the chapter you're on.`,
         [choice("start", `Start with chapter ${n.number}`, { words: ["start", "yes", n.name.toLowerCase()] }), choice("other", "Choose another chapter", { words: ["another", "other", "choose"] })],
-        { known: [["Class", `${d.classNum}`], ["Subject", "Science"]], sections: [section("From the textbook contents", Curriculum.forClass(d.classNum).map((c) => `Chapter ${c.number}: ${c.name}`))] });
+        { known: [["Class", `${d.classNum}`], ["Subject", d.subject]], sections: [section("From the textbook contents", Curriculum.forClass(d.classNum, d.subject).map((c) => `Chapter ${c.number}: ${c.name}`))] });
     }
 
     case "class_lang": {
@@ -171,15 +178,15 @@ export function buildStep(e) {
     case "plan_class":
       return makeStep("plan_class", Flow.PLAN, "Plan a lesson", "Which class?", classChoices(), {
         help: "With the voice guide you can also say the whole lesson at once, for example: plan the next class 7 science lesson.",
-        sections: [section("Covered", ["SEEDS covers science for classes 6, 7 and 9."])], secondary: [homeBtn()], progress: planProgress(0) });
+        sections: [section("Covered", ["SEEDS covers science and maths for classes 6, 7 and 9."])], secondary: [homeBtn()], progress: planProgress(0) });
 
     case "plan_chapter": {
       const c = d.classNum != null ? d.classNum : 6;
-      const next = e.nextChapter(c);
-      const list = Curriculum.forClass(c).sort((a, b) => (a.id === (next && next.id) ? -1 : a.number) - (b.id === (next && next.id) ? -1 : b.number))
+      const next = e.nextChapter(c, d.subject);
+      const list = Curriculum.forClass(c, d.subject).sort((a, b) => (a.id === (next && next.id) ? -1 : a.number) - (b.id === (next && next.id) ? -1 : b.number))
         .map((x) => choice(x.id, `Chapter ${x.number}: ${x.name}` + (next && x.id === next.id ? " (next)" : ""), { words: [x.name.toLowerCase(), `chapter ${x.number}`], suggested: !!next && x.id === next.id }));
-      return makeStep("plan_chapter", Flow.PLAN, "Chapter", "Which chapter?", paged(list, r.page), { known: [["Class", `${c}`], ["Subject", "Science"]], progress: planProgress(0),
-        suggestion: next ? { choiceId: next.id, reason: e.st.sessions.some((x) => x.endedAt != null && (e.lesson(x.lessonId) || {}).classNum === c) ? "because it's where your class is up to" : "because it comes first in the textbook" } : null });
+      return makeStep("plan_chapter", Flow.PLAN, "Chapter", "Which chapter?", paged(list, r.page), { known: [["Class", `${c}`], ["Subject", d.subject]], progress: planProgress(0),
+        suggestion: next ? { choiceId: next.id, reason: e.st.sessions.some((x) => x.endedAt != null && (e.lesson(x.lessonId) || {}).classNum === c && (e.lesson(x.lessonId) || {}).subject === d.subject) ? "because it's where your class is up to" : "because it comes first in the textbook" } : null });
     }
 
     case "plan_topic": {
@@ -194,10 +201,10 @@ export function buildStep(e) {
     case "plan_confirm": {
       const chx = Curriculum.chapter(d.chapterId), tpx = Curriculum.topic(d.topicId);
       const where = `chapter ${chx && chx.number}, ${chx && chx.name}, topic ${tpx && tpx.name}`;
-      const taught = !!chx && st.sessions.some((x) => x.endedAt != null && (e.lesson(x.lessonId) || {}).classNum === chx.classNum);
+      const taught = !!chx && st.sessions.some((x) => x.endedAt != null && (e.lesson(x.lessonId) || {}).classNum === chx.classNum && (e.lesson(x.lessonId) || {}).subject === chx.subject);
       return makeStep("plan_confirm", Flow.PLAN, "Your lesson", taught ? `Next is ${where}. Continue from here?` : `Start with ${where}?`,
         [choice("yes", "Yes, continue", { words: ["yes", "right", "correct", "continue"] }), choice("change", "Change something", { words: ["no", "change"] })],
-        { known: [["Class", `${chx && chx.classNum}`], ["Subject", "Science"], ["Chapter", `${chx && chx.number}. ${chx && chx.name}`], ["Topic", `${tpx && tpx.name}`],
+        { known: [["Class", `${chx && chx.classNum}`], ["Subject", chx && chx.subject], ["Chapter", `${chx && chx.number}. ${chx && chx.name}`], ["Topic", `${tpx && tpx.name}`],
           ...(chx && e.classLang(chx.classNum) ? [["Language", e.classLang(chx.classNum)]] : [])],
           progress: planProgress(0) });
     }
@@ -522,8 +529,8 @@ export function buildStep(e) {
     case "quiz_chapter": {
       const c = d.classNum != null ? d.classNum : 6;
       return makeStep("quiz_chapter", Flow.QUIZ, "Plan a quiz", "Which chapter?",
-        paged(Curriculum.forClass(c).map((x) => choice(x.id, `Chapter ${x.number}: ${x.name}`, { words: [x.name.toLowerCase(), `chapter ${x.number}`] })), r.page),
-        { known: [["Class", `${c}`], ["Subject", "Science"]] });
+        paged(Curriculum.forClass(c, d.subject).map((x) => choice(x.id, `Chapter ${x.number}: ${x.name}`, { words: [x.name.toLowerCase(), `chapter ${x.number}`] })), r.page),
+        { known: [["Class", `${c}`], ["Subject", d.subject]] });
     }
 
     case "quiz_source": {
@@ -666,7 +673,7 @@ function homeStep(e) {
     // Home always offers a way forward, whatever state the lessons are in
     // after a TIK is taught, Home offers what comes next: the chapter's next topic, or the next chapter
     const up = !active && !todo && !ready.length ? e.upNext() : null;
-    if (up) { sections.push(section("Up next", [`Class ${up.chapter.classNum} science, ${e.upNextText(up)}`], { emphasis: true })); choices.push(choice("plan_next", "Plan the next lesson", { words: ["plan the next lesson", "plan next", "next lesson", "yes", "okay", "sure"] })); }
+    if (up) { sections.push(section("Up next", [`Class ${up.chapter.classNum} ${up.chapter.subject.toLowerCase()}, ${e.upNextText(up)}`], { emphasis: true })); choices.push(choice("plan_next", "Plan the next lesson", { words: ["plan the next lesson", "plan next", "next lesson", "yes", "okay", "sure"] })); }
     if (!todo && !ready.length && !up) choices.push(choice("next_topic", "What should I teach next?", { words: ["what should i teach", "teach next", "lesson plan", "what is my lesson plan"] }));
     choices.push(choice("plan", "Plan a lesson", { words: ["plan"] }));
   }

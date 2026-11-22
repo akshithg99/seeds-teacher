@@ -157,10 +157,14 @@ test("class not covered", async () => {
 
 test("opening request fills details and asks only what is missing", async () => {
   await choose("no");
-  const r = await e.fillDetails("plan", 7, null, null, Source.VOICE);
-  // it offers where the class is up to in the textbook, as one yes-or-no question (8.1)
+  // the class alone: the subject is asked next
+  assert.equal(await e.fillDetails("plan", 7, null, null, Source.VOICE), "Class 7. Which subject for class 7? You can say Science or Maths.");
+  assert.equal(id(), "pick_subject");
+  // with the subject, it offers where the class is up to in that subject's textbook, as one yes-or-no question (8.1)
+  const r = await e.fillDetails("plan", 7, null, null, Source.VOICE, "Science");
   assert.equal(id(), "plan_confirm");
   assert.match(r, /^Class 7, science\. Start with chapter 1, Nutrition in Plants, topic [^?]+\?$/);
+  assert.match(await e.fillDetails("plan", 9, null, null, Source.VOICE, "Maths"), /^Class 9, maths\. Start with chapter 1, Number Systems, topic Rational numbers\?$/);
 });
 
 test("matcher: numbers, commands, opening", async () => {
@@ -173,6 +177,8 @@ test("matcher: numbers, commands, opening", async () => {
   assert.deepEqual(match("I want to talk about my students and their needs today", s, null), { type: "none" });
   const o = opening("plan class 7 science for thursday");
   assert.equal(o.classNum, 7);
+  assert.equal(o.subject, "Science");
+  assert.equal(opening("plan the class 6 maths lesson").subject, "Maths");
   assert.equal(o.intent, "plan"); // a day is not a detail any more: there is no calendar (8.1)
 });
 
@@ -180,10 +186,15 @@ test("back and what did you do", async () => {
   await choose("no");
   await choose("plan");
   await choose("c6");
+  assert.equal(id(), "pick_subject");
+  await choose("Maths");
   assert.equal(id(), "plan_chapter");
+  assert.ok(e.step.choices.every((c) => !c.id.startsWith("6-")), "only maths chapters");
+  e.command("back", Source.VOICE);
+  assert.equal(id(), "pick_subject");
   e.command("back", Source.VOICE);
   assert.equal(id(), "plan_class");
-  assert.match(e.command("what_did_you_do", Source.VOICE), /Class 6/);
+  assert.match(e.command("what_did_you_do", Source.VOICE), /Maths/);
 });
 
 test("content in another language is marked for its own voice (FR-110)", () => {
@@ -213,12 +224,12 @@ test("the agent talks in plain words, never a numbered menu", async () => {
   await choose("plan");
   assert.equal(spoken(e.step), "Which class? You can say class 6, class 7 or class 9.");
   // a question that already names its choices is not followed by a list
-  await choose("c6"); await choose("6-magnets"); await choose("6-magnets-2"); await choose("yes");
+  await choose("c6"); await choose("Science"); await choose("6-magnets"); await choose("6-magnets-2"); await choose("yes");
   await choose("English", true);
   assert.equal(spoken(e.step), "Ready. Please review your lesson. Shall we go through it now?");
   // a suggestion is offered first, and "yes" takes it
   e.fillDetails("next", null, null, null, Source.VOICE);
-  await choose("c6"); await choose("other");
+  await choose("c6"); await choose("Science"); await choose("other");
   assert.equal(spoken(e.step), "Which chapter? How about chapter 1, Exploring Magnets? It comes first in the textbook. Or tell me another one.");
   assert.deepEqual(match("yes", e.step, null), { type: "choose", choiceId: "6-magnets" });
   const help = e.command("help", Source.VOICE);
@@ -236,7 +247,7 @@ test("the agent talks in plain words, never a numbered menu", async () => {
 test("Home offers to carry on a half-planned lesson", async () => {
   await choose("no");
   // Nutrition in Plants has no Content Studio TIK, so its TIK is a draft and the lesson is not ready yet
-  await choose("plan"); await choose("c7"); await choose("7-nutrition"); await choose(e.step.choices[0].id); await choose("yes");
+  await choose("plan"); await choose("c7"); await choose("Science"); await choose("7-nutrition"); await choose(e.step.choices[0].id); await choose("yes");
   await choose(e.step.choices.find((c) => /English/.test(c.label)).id, true);
   assert.equal(id(), "plan_review");
   assert.equal(e.lesson().tikState, "DRAFT");
@@ -279,7 +290,7 @@ test("Workspace lists Content Studio items and the teacher's own, and opens each
   assert.equal(e.audio.isPlaying(), false); // leaving stops it
 
   // a TIK the teacher drafts shows up as theirs, not approved yet
-  await choose("home"); await choose("plan"); await choose("c6"); await choose("6-magnets"); await choose("6-magnets-2"); await choose("yes");
+  await choose("home"); await choose("plan"); await choose("c6"); await choose("Science"); await choose("6-magnets"); await choose("6-magnets-2"); await choose("yes");
   await choose(e.step.choices.find((c) => /English/.test(c.label)).id, true);
   await choose("topic_tik");
   await e.submitText("12 students", Source.BUTTON);
@@ -296,7 +307,7 @@ test("Plan a quiz: Content Studio's or a new one, for the chapter or some topics
   assert.deepEqual(e.step.choices.map((c) => c.id), ["plan", "mine"]);
 
   // Content Studio has a quiz for Exploring Magnets: it is offered first, with its answer key
-  await choose("plan"); await choose("c6"); await choose("6-magnets");
+  await choose("plan"); await choose("c6"); await choose("Science"); await choose("6-magnets");
   assert.equal(id(), "quiz_source");
   await choose("use_cs");
   assert.equal(id(), "quiz_review");
@@ -333,7 +344,7 @@ test("Plan a quiz: Content Studio's or a new one, for the chapter or some topics
 
   // or a new quiz on some topics only
   await e.goTo(Flow.QUIZ, Source.BUTTON);
-  await choose("plan"); await choose("c6"); await choose("6-magnets"); await choose("make");
+  await choose("plan"); await choose("c6"); await choose("Science"); await choose("6-magnets"); await choose("make");
   assert.equal(id(), "quiz_scope");
   await choose("topics");
   assert.equal(e.step.choices.find((c) => c.id === "make").enabled, false);
@@ -351,7 +362,7 @@ test("Plan a quiz: Content Studio's or a new one, for the chapter or some topics
 test("a class that stops partway through the TIK continues from the next topic; a finished TIK offers the next chapter", async () => {
   await choose("no");
   e.setClassLang(6, "English");
-  for (const c of ["plan", "c6", "6-magnets", "6-magnets-1", "yes", "tik", "use_as_is"]) await choose(c);
+  for (const c of ["plan", "c6", "Science", "6-magnets", "6-magnets-1", "yes", "tik", "use_as_is"]) await choose(c);
   await e.choose("approve", Source.BUTTON, true); // questions
   await choose("use"); // Content Studio audio
   const steps = TikTabs.classSteps(e.lesson().tik);

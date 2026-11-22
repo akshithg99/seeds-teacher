@@ -42,6 +42,7 @@ const TOOLS = [
   tool("fill_details", "Opening request: fill the lesson details the teacher said, then go to the first step still missing a detail.", {
     intent: { type: "string", enum: ["plan", "teach", "quiz", "next"] },
     class_num: { type: "integer", description: "Class or grade number, if said" },
+    subject: { type: "string", enum: ["Science", "Maths"], description: "Subject, if said" },
     chapter: { type: "string", description: "Chapter name as said, if said" },
     topic: { type: "string", description: "Topic name as said, if said" },
   }, ["intent"]),
@@ -81,7 +82,7 @@ export class AgentBrain {
     let said;
     switch (name) {
       case "choose": said = await e.choose(String(input.choice_id || ""), Source.VOICE); break;
-      case "fill_details": said = await e.fillDetails(input.intent ? String(input.intent) : null, num(input.class_num), input.chapter ? String(input.chapter) : null, input.topic ? String(input.topic) : null, Source.VOICE); break;
+      case "fill_details": said = await e.fillDetails(input.intent ? String(input.intent) : null, num(input.class_num), input.chapter ? String(input.chapter) : null, input.topic ? String(input.topic) : null, Source.VOICE, input.subject ? String(input.subject) : null); break;
       case "confirm_pending": said = await e.confirmPending(Source.VOICE, this.lastUtterance); break;
       case "cancel_pending": said = e.cancelPending(); break;
       case "submit_text": said = await e.submitText(String(input.text || ""), Source.VOICE); break;

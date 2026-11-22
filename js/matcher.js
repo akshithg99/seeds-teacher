@@ -122,10 +122,11 @@ export function opening(text) {
   else if (t.startsWith("teach") || t.includes("start class")) intent = "teach";
   else if (t.includes("plan") || t.includes("prepare") || cls != null) intent = "plan";
   if (!intent) return null;
-  const ch = Curriculum.findChapter(cls, t);
+  const subject = /\b(maths?|mathematics)\b/.test(t) ? "Maths" : /\bscience\b/.test(t) ? "Science" : null;
+  const ch = Curriculum.findChapter(cls, t, subject);
   // explicit: the teacher said what to do, not only a class ("class 7" alone answers a "Which class?")
   const explicit = intent !== "plan" || /\b(plan|prepare)\b/.test(t);
-  return { intent, classNum: cls, chapter: ch ? ch.name : null, explicit };
+  return { intent, classNum: cls, subject, chapter: ch ? ch.name : null, explicit };
 }
 
 /** Words the recogniser should expect at this step (FR-101). */

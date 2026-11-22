@@ -25,6 +25,8 @@ beforeEach(async () => {
 test("fast path answers on the device, with no AI call", async () => {
   await e.choose("plan", Source.BUTTON);
   await v.handle("two");
+  assert.equal(e.step.id, "pick_subject");
+  await v.handle("maths");
   assert.equal(e.step.id, "plan_chapter");
   assert.match(out.said.at(-1), /Which chapter\?/);
   assert.match(v.turnInfo, /no AI call/);
@@ -58,7 +60,7 @@ test("cancelling a Claude turn while it works applies nothing (FR-99)", async ()
 
 test("a commit by voice needs its own word", async () => {
   await e.choose("plan", Source.BUTTON);
-  await e.choose("c6", Source.BUTTON); await e.choose("6-measure", Source.BUTTON); await e.choose("6-measure-1", Source.BUTTON); await e.choose("yes", Source.BUTTON);
+  await e.choose("c6", Source.BUTTON); await e.choose("Science", Source.BUTTON); await e.choose("6-measure", Source.BUTTON); await e.choose("6-measure-1", Source.BUTTON); await e.choose("yes", Source.BUTTON);
   await v.handle("english");
   assert.ok(e.pending, "language is read back first");
   await v.handle("yes");
@@ -74,7 +76,7 @@ test("waking greets, then listens; work in progress is said aloud", async () => 
   v.sleep(); v.wake();
   assert.equal(out.said.at(-1), "Yes, how can I help?");
   // a voice request that prepares something says what it is doing
-  await e.choose("plan", Source.BUTTON); await e.choose("c6", Source.BUTTON); await e.choose("6-magnets", Source.BUTTON); await e.choose("6-magnets-2", Source.BUTTON);
+  await e.choose("plan", Source.BUTTON); await e.choose("c6", Source.BUTTON); await e.choose("Science", Source.BUTTON); await e.choose("6-magnets", Source.BUTTON); await e.choose("6-magnets-2", Source.BUTTON);
   e.setClassLang(6, "English"); await e.choose("yes", Source.BUTTON); await e.choose("topic_tik", Source.BUTTON);
   await v.handle("skip");
   assert.deepEqual(out.notes, ["Preparing your lesson plan."]);

@@ -26,14 +26,14 @@ export class Store {
 /** Context the teacher has given so far. Shared by buttons and voice, so switching mode loses nothing (FR-94). */
 class Draft {
   constructor() {
-    this.classNum = null; this.chapterId = null; this.topicId = null; this.lessonId = null;
+    this.classNum = null; this.subject = null; this.subjectNext = null; this.chapterId = null; this.topicId = null; this.lessonId = null;
     this.sessionId = null; this.recordId = null; this.quizId = null; this.patternId = null; this.quizTopics = []; this.quizUntil = null;
     this.wsKind = null; this.wsItem = null;
     this.changeCount = 0; this.tries = 0; this.checkpointFor = "tik"; this.lcQueue = []; this.lcIndex = 0;
     this.audioClipId = null; this.justSignedIn = false; this.langFor = null; this.langNext = null;
   }
   clearPlanning() {
-    Object.assign(this, { classNum: null, chapterId: null, topicId: null, lessonId: null, changeCount: 0, tries: 0, audioClipId: null });
+    Object.assign(this, { classNum: null, subject: null, chapterId: null, topicId: null, lessonId: null, changeCount: 0, tries: 0, audioClipId: null });
   }
   snapshot() { const d = new Draft(); Object.assign(d, this, { lcQueue: [...this.lcQueue], quizTopics: [...this.quizTopics] }); return d; }
   restore(o) { Object.assign(this, o, { lcQueue: [...o.lcQueue], quizTopics: [...(o.quizTopics || [])], justSignedIn: false }); }
@@ -384,17 +384,22 @@ export class Engine {
    * Opening request (FR-102): fill each detail caught, read them back in one sentence, and go to the first
    * step still missing a detail. It only fills details and moves; nothing changes or commits here.
    */
-  async fillDetails(intent, classNum, chapter, topic, source) {
+  async fillDetails(intent, classNum, chapter, topic, source, subject = null) {
     if (classNum != null && !Curriculum.coveredClasses.includes(classNum)) return `Class ${classNum} is not covered yet. SEEDS covers classes 6, 7 and 9 for now.`;
-    this.log("fill_details", intent, source, [classNum, chapter, topic].filter((x) => x != null).join(","));
+    this.log("fill_details", intent, source, [classNum, subject, chapter, topic].filter((x) => x != null).join(","));
     const d = this.draft;
     const caught = [], notes = [];
+    if (!Curriculum.subjects.includes(subject)) subject = null;
+    // with the class but not the subject, ask the subject next, then go on to `next`
+    const askSubject = (next) => { d.subjectNext = next; return "pick_subject"; };
     switch ((intent || "").toLowerCase()) {
       case "next":
         // "What should I teach next?" (J21, FR-106)
         d.clearPlanning();
-        if (classNum != null) { d.classNum = classNum; caught.push(`class ${classNum}`, "science"); this.goWithLang(classNum, "next_chapter"); }
-        else this.go("next_class");
+        if (classNum != null) {
+          d.classNum = classNum; d.subject = subject; caught.push(`class ${classNum}`, ...(subject ? [subject.toLowerCase()] : []));
+          this.goWithLang(classNum, subject ? "next_chapter" : askSubject("next_chapter"));
+        } else this.go("next_class");
         break;
       case "teach": {
         const ready = this.st.lessons.filter((l) => this.ready(l) && !this.taught(l) && (classNum == null || l.classNum === classNum));
@@ -402,25 +407,34 @@ export class Engine {
         else { notes.push(`No lesson is ready to teach${classNum != null ? ` for class ${classNum}` : ""}.`); this.go("home"); }
         break;
       }
-      case "quiz": if (classNum != null) { d.classNum = classNum; caught.push(`class ${classNum}`); this.go("quiz_chapter"); } else this.go("quiz_home"); break;
+      case "quiz":
+        if (classNum != null) { d.classNum = classNum; d.subject = subject; caught.push(`class ${classNum}`, ...(subject ? [subject.toLowerCase()] : [])); this.go(subject ? "quiz_chapter" : askSubject("quiz_chapter")); }
+        else this.go("quiz_home");
+        break;
       default: {
         d.lessonId = null;
-        if (classNum != null) { d.classNum = classNum; caught.push(`class ${classNum}`, "science"); }
+        // a different class or subject starts over: an earlier request's chapter and topic do not carry across
+        if ((classNum != null && classNum !== d.classNum) || (subject && subject !== d.subject)) { d.chapterId = null; d.topicId = null; if (!subject) d.subject = null; }
+        if (classNum != null) d.classNum = classNum;
+        if (subject) d.subject = subject;
         if (chapter) {
-          const ch = Curriculum.findChapter(d.classNum, chapter);
-          if (ch) { d.chapterId = ch.id; d.classNum = ch.classNum; } else notes.push(`I didn't find a chapter called ${chapter}.`);
+          const ch = Curriculum.findChapter(d.classNum, chapter, d.subject);
+          if (ch) { d.chapterId = ch.id; d.classNum = ch.classNum; d.subject = ch.subject; } else notes.push(`I didn't find a chapter called ${chapter}.`);
         }
-        const chx = Curriculum.chapter(d.chapterId);
-        if (chx && !caught.includes(chx.name)) caught.push(`chapter ${chx.number}, ${chx.name}`);
-        // the class is known but not the chapter: offer where the class is up to (FR-106), as a yes-or-no question
-        if (d.classNum != null && !d.chapterId && !chapter) { const nc = this.nextChapter(d.classNum); if (nc) d.chapterId = nc.id; }
         if (topic) {
-          const tp = Curriculum.findTopic(chx, topic);
-          if (tp) { d.topicId = tp.id; d.chapterId = Curriculum.chapterOfTopic(tp.id).id; caught.push(tp.name); }
+          const tp = Curriculum.findTopic(Curriculum.chapter(d.chapterId), topic);
+          if (tp) { const cht = Curriculum.chapterOfTopic(tp.id); d.topicId = tp.id; d.chapterId = cht.id; d.subject = cht.subject; }
           else notes.push(`I didn't find a topic called ${topic}.`);
         }
+        if (d.classNum != null) caught.push(`class ${d.classNum}`, ...(d.subject ? [d.subject.toLowerCase()] : []));
+        const chx = Curriculum.chapter(d.chapterId);
+        if (chx) caught.push(`chapter ${chx.number}, ${chx.name}`);
+        if (d.topicId) caught.push(Curriculum.topic(d.topicId).name);
+        // the class and subject are known but not the chapter: offer where the class is up to (FR-106), as a yes-or-no question
+        if (d.classNum != null && d.subject && !d.chapterId && !chapter) { const nc = this.nextChapter(d.classNum, d.subject); if (nc) d.chapterId = nc.id; }
         if (d.chapterId && !d.topicId) { const nt = this.nextTopic(Curriculum.chapter(d.chapterId)); d.topicId = nt && nt.id; }
         if (d.classNum == null) this.go("plan_class");
+        else if (!d.subject) this.go(askSubject("plan_chapter"));
         else if (!d.chapterId) this.go("plan_chapter");
         else if (!d.topicId) this.go("plan_topic");
         else this.go("plan_confirm");
@@ -457,17 +471,18 @@ export class Engine {
   /** What to plan next, from the class taught last: the chapter's next topic, or the next chapter once every topic is covered. */
   upNext() {
     const s = [...this.st.sessions].reverse().find((x) => x.endedAt != null && this.lesson(x.lessonId));
-    const ch = s && this.nextChapter(this.lesson(s.lessonId).classNum);
+    const l = s && this.lesson(s.lessonId);
+    const ch = l && this.nextChapter(l.classNum, l.subject);
     return ch ? { chapter: ch, topic: this.nextTopic(ch) } : null;
   }
   upNextText(u) { return `chapter ${u.chapter.number}, ${u.chapter.name}: ${u.topic.name}`; }
 
   /** FR-106: next chapter is the one after the last taught; otherwise the first in contents order. */
-  nextChapter(classNum, after = null) {
-    const list = Curriculum.forClass(classNum);
+  nextChapter(classNum, subject, after = null) {
+    const list = Curriculum.forClass(classNum, subject);
     let ref = after;
     if (!ref) {
-      const taughtLessons = this.st.sessions.filter((s) => s.endedAt != null).map((s) => this.lesson(s.lessonId)).filter((l) => l && l.classNum === classNum);
+      const taughtLessons = this.st.sessions.filter((s) => s.endedAt != null).map((s) => this.lesson(s.lessonId)).filter((l) => l && l.classNum === classNum && l.subject === subject);
       ref = taughtLessons.length ? taughtLessons[taughtLessons.length - 1].chapterId : null;
     }
     if (!ref) return list[0] || null;
@@ -749,7 +764,7 @@ export class Engine {
           case "next_topic": this.go("next_class"); break;
           case "plan_next": {
             const u = this.upNext(); if (!u) break;
-            d.clearPlanning(); d.classNum = u.chapter.classNum; d.chapterId = u.chapter.id; d.topicId = u.topic.id;
+            d.clearPlanning(); d.classNum = u.chapter.classNum; d.subject = u.chapter.subject; d.chapterId = u.chapter.id; d.topicId = u.topic.id;
             this.go("plan_confirm"); break;
           }
           case "teach_pick": this.go("teach_pick"); break;
@@ -798,13 +813,14 @@ export class Engine {
       case "teach_pick":
         if (c.startsWith("l:")) { d.lessonId = c.slice(2); this.go("teach_start"); } else if (c === "plan") { d.clearPlanning(); this.go("plan_class"); }
         break;
-      case "next_class": { const n = parseInt(c.slice(1), 10); d.clearPlanning(); d.classNum = n; this.goWithLang(n, "next_chapter"); break; }
+      case "next_class": { const n = parseInt(c.slice(1), 10); d.clearPlanning(); d.classNum = n; d.subjectNext = "next_chapter"; this.goWithLang(n, "pick_subject"); break; }
+      case "pick_subject": d.subject = c; d.chapterId = null; d.topicId = null; this.go(d.subjectNext || "plan_chapter"); break;
       case "next_chapter":
         if (c === "start") {
-          const nc = this.nextChapter(d.classNum);
+          const nc = this.nextChapter(d.classNum, d.subject);
           d.chapterId = nc.id; const nt = this.nextTopic(nc); d.topicId = nt && nt.id;
           this.go("plan_confirm");
-          return `Class ${nc.classNum}, science, chapter ${nc.number}, ${nc.name}.`;
+          return `Class ${nc.classNum}, ${nc.subject.toLowerCase()}, chapter ${nc.number}, ${nc.name}.`;
         }
         this.go("plan_chapter");
         break;
@@ -820,7 +836,7 @@ export class Engine {
       }
 
       // ---------------- F3 Plan the lesson
-      case "plan_class": d.classNum = parseInt(c.slice(1), 10); d.chapterId = null; d.topicId = null; this.go("plan_chapter"); break;
+      case "plan_class": d.classNum = parseInt(c.slice(1), 10); d.subject = null; d.chapterId = null; d.topicId = null; d.subjectNext = "plan_chapter"; this.go("pick_subject"); break;
       case "plan_chapter": d.chapterId = c; d.topicId = null; this.go("plan_topic"); break;
       case "plan_topic": d.topicId = c; this.go("plan_confirm"); break;
       case "plan_confirm":
@@ -831,7 +847,7 @@ export class Engine {
           return pre + await this.continuePlan();
         }
         // "no" keeps the class and asks for the chapter
-        if (c === "change") { d.chapterId = null; d.topicId = null; this.go(d.classNum != null ? "plan_chapter" : "plan_class"); }
+        if (c === "change") { d.subject = (Curriculum.chapter(d.chapterId) || {}).subject || d.subject; d.chapterId = null; d.topicId = null; this.go(d.classNum != null ? "plan_chapter" : "plan_class"); }
         break;
       case "plan_previous": {
         this.updateLesson(l.id, (x) => ({ ...x, usePreviousContext: c === "use" }));
@@ -1098,7 +1114,7 @@ export class Engine {
         if (c === "plan") { d.clearPlanning(); this.go("quiz_class"); }
         if (c === "mine") { d.wsKind = "quizzes"; this.go("ws_list"); }
         break;
-      case "quiz_class": d.classNum = parseInt(c.slice(1), 10); d.chapterId = null; this.go("quiz_chapter"); break;
+      case "quiz_class": d.classNum = parseInt(c.slice(1), 10); d.subject = null; d.chapterId = null; d.subjectNext = "quiz_chapter"; this.go("pick_subject"); break;
       case "quiz_chapter": {
         d.chapterId = c; d.quizTopics = [];
         this.go(Curriculum.chapter(c).syncedQuiz ? "quiz_source" : "quiz_scope");

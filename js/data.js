@@ -30,6 +30,7 @@ export const GUIDELINES = [
 ];
 
 const SUBJECT = "Science";
+const MATHS = "Maths";
 
 const chapters = [
   // ---------------- Class 6 ----------------
@@ -200,6 +201,101 @@ const chapters = [
       t("9-sound-3", "Echo", ["An echo is a sound heard again after it reflects from a surface.", "To hear a clear echo, the reflecting surface must be far enough away."], ["Where might you hear an echo near your school?"]),
     ],
   },
+
+  // ================ Maths (sample Course, no Content Studio TIK, quiz or audio yet) ================
+  // ---------------- Class 6 ----------------
+  {
+    id: "6m-patterns", classNum: 6, subject: MATHS, number: 1, name: "Patterns in Mathematics",
+    objective: "Students find the rule behind number and shape patterns and continue them.",
+    keyPoints: ["A pattern follows a rule.", "Odd numbers, square numbers and triangular numbers are number patterns."],
+    topics: [
+      t("6m-patterns-1", "Number patterns", ["A number pattern is a list of numbers that follows a rule.", "In 1, 3, 5, 7 the rule is: add 2 each time, so the next number is 9."], ["What comes next in 2, 4, 6, 8, and why?"]),
+      t("6m-patterns-2", "Square and triangular numbers", ["A square number is a number multiplied by itself, such as 1, 4, 9 and 16.", "Triangular numbers, such as 1, 3, 6 and 10, are the counts of objects that can be arranged in a triangle."], ["Is 25 a square number? How do you know?"]),
+      t("6m-patterns-3", "Shape patterns", ["A shape pattern repeats or grows by a rule.", "Each new row of a triangle of objects has one more object than the row before."], ["How many objects are in the fifth row of a triangle that starts with one?"]),
+    ],
+  },
+  {
+    id: "6m-lines", classNum: 6, subject: MATHS, number: 2, name: "Lines and Angles",
+    objective: "Students tell points, lines, line segments and rays apart and compare angles.",
+    keyPoints: ["A line segment has two end points; a ray has one.", "An angle is formed by two rays from the same point."],
+    topics: [
+      t("6m-lines-1", "Points, lines and rays", ["A line segment has two end points.", "A ray starts at one point and goes on without end in one direction."], ["How is a ray different from a line segment?"]),
+      t("6m-lines-2", "Angles", ["An angle is formed by two rays that start from the same point, called the vertex.", "A right angle is a quarter turn, like the corner of a book."], ["Name one right angle you can feel in the classroom."]),
+      t("6m-lines-3", "Comparing angles", ["An angle smaller than a right angle is acute.", "An angle bigger than a right angle and smaller than a straight angle is obtuse."], ["Is the angle of a half-open door acute or obtuse?"]),
+    ],
+  },
+  {
+    id: "6m-numplay", classNum: 6, subject: MATHS, number: 3, name: "Number Play",
+    objective: "Students explore even and odd numbers, palindromes and quick ways to add.",
+    keyPoints: ["An even number can be split into two equal groups.", "A palindrome reads the same forwards and backwards."],
+    topics: [
+      t("6m-numplay-1", "Even and odd numbers", ["An even number can be shared equally into two groups.", "An odd number always leaves one over when shared into two groups."], ["Is 15 even or odd? How can you check?"]),
+      t("6m-numplay-2", "Palindromic numbers", ["A palindromic number reads the same forwards and backwards.", "121 and 4554 are palindromic numbers."], ["Say a three-digit palindromic number."]),
+      t("6m-numplay-3", "Mental maths", ["Adding in tens first makes sums quicker.", "To add 38 and 25, add 30 and 20, then 8 and 5, then add the two answers."], ["How would you add 46 and 37 in your head?"]),
+    ],
+  },
+  // ---------------- Class 7 ----------------
+  {
+    id: "7m-integers", classNum: 7, subject: MATHS, number: 1, name: "Integers",
+    objective: "Students use positive and negative numbers and add and subtract them.",
+    keyPoints: ["Integers are whole numbers and their negatives.", "Adding a negative number is the same as subtracting."],
+    topics: [
+      t("7m-integers-1", "Positive and negative numbers", ["Integers are the whole numbers and their negatives, such as minus 3, 0 and 5.", "Numbers below zero, such as a temperature of minus 2 degrees, are negative."], ["Which is bigger, minus 5 or minus 2?"]),
+      t("7m-integers-2", "Adding integers", ["Adding a positive number moves up the number line.", "Adding a negative number moves down the number line."], ["What is 4 plus minus 6?"]),
+      t("7m-integers-3", "Subtracting integers", ["Subtracting a number is the same as adding its opposite.", "5 minus minus 2 is the same as 5 plus 2, which is 7."], ["What is 3 minus minus 4?"]),
+    ],
+  },
+  {
+    id: "7m-fractions", classNum: 7, subject: MATHS, number: 2, name: "Fractions and Decimals",
+    objective: "Students multiply and divide fractions and work with decimals.",
+    keyPoints: ["To multiply fractions, multiply the tops and multiply the bottoms.", "A decimal is another way to write a fraction with 10, 100 or 1000 at the bottom."],
+    topics: [
+      t("7m-fractions-1", "Multiplying fractions", ["To multiply two fractions, multiply the numerators and multiply the denominators.", "Half of a quarter is one eighth."], ["What is one half times one third?"]),
+      t("7m-fractions-2", "Dividing fractions", ["To divide by a fraction, multiply by its reciprocal.", "The reciprocal of two thirds is three halves."], ["What is the reciprocal of three quarters?"]),
+      t("7m-fractions-3", "Decimals", ["A decimal shows parts of a whole after the decimal point.", "0.5 is the same as one half."], ["Which is bigger, 0.5 or 0.25?"]),
+    ],
+  },
+  {
+    id: "7m-equations", classNum: 7, subject: MATHS, number: 3, name: "Simple Equations",
+    objective: "Students write simple equations and solve them by balancing both sides.",
+    keyPoints: ["An equation says two things are equal.", "Doing the same thing to both sides keeps an equation balanced."],
+    topics: [
+      t("7m-equations-1", "What an equation is", ["An equation says that two expressions are equal, such as x plus 3 equals 7.", "The letter stands for a number we do not know yet."], ["In x plus 3 equals 7, what does x stand for?"]),
+      t("7m-equations-2", "Solving an equation", ["To solve an equation, do the same thing to both sides until the letter is alone.", "If x plus 3 equals 7, take 3 from both sides, so x equals 4."], ["Solve: x minus 2 equals 5."]),
+      t("7m-equations-3", "Equations from word problems", ["A word problem can be written as an equation by naming the unknown with a letter.", "If 3 pens cost 30 rupees, then 3 times p equals 30, so p equals 10."], ["Write an equation: a number plus 6 is 10."]),
+    ],
+  },
+  // ---------------- Class 9 ----------------
+  {
+    id: "9m-numsys", classNum: 9, subject: MATHS, number: 1, name: "Number Systems",
+    objective: "Students tell rational and irrational numbers apart and place real numbers on the number line.",
+    keyPoints: ["A rational number can be written as p over q, with q not zero.", "Rational and irrational numbers together are the real numbers."],
+    topics: [
+      t("9m-numsys-1", "Rational numbers", ["A rational number can be written as p over q, where p and q are integers and q is not zero.", "Every integer is a rational number, because 5 is 5 over 1."], ["Is 0.75 a rational number? Write it as a fraction."]),
+      t("9m-numsys-2", "Irrational numbers", ["An irrational number cannot be written as p over q.", "The square root of 2 is irrational; its decimal goes on without repeating."], ["Is the square root of 9 rational or irrational?"]),
+      t("9m-numsys-3", "Real numbers on the number line", ["Every real number has a place on the number line.", "Between any two real numbers there are infinitely many others."], ["Name a number between 1 and 2."]),
+    ],
+  },
+  {
+    id: "9m-poly", classNum: 9, subject: MATHS, number: 2, name: "Polynomials",
+    objective: "Students identify polynomials, their degree and zeroes, and factorise simple ones.",
+    keyPoints: ["The degree of a polynomial is its highest power.", "A zero of a polynomial makes its value zero."],
+    topics: [
+      t("9m-poly-1", "Polynomials in one variable", ["A polynomial in one variable is a sum of terms with whole-number powers of that variable.", "The degree is the highest power, so x squared plus 3x has degree 2."], ["What is the degree of 4x cubed plus x?"]),
+      t("9m-poly-2", "Zeroes of a polynomial", ["A zero of a polynomial is a value of x that makes the polynomial equal to zero.", "2 is a zero of x minus 2."], ["What is the zero of x plus 5?"]),
+      t("9m-poly-3", "Factorising polynomials", ["Factorising writes a polynomial as a product of simpler polynomials.", "x squared minus 9 factorises as x plus 3 times x minus 3."], ["Factorise x squared minus 4."]),
+    ],
+  },
+  {
+    id: "9m-coord", classNum: 9, subject: MATHS, number: 3, name: "Coordinate Geometry",
+    objective: "Students describe the position of a point with coordinates and name the quadrants.",
+    keyPoints: ["A point is described by its x and y coordinates.", "The two axes divide the plane into four quadrants."],
+    topics: [
+      t("9m-coord-1", "The Cartesian system", ["The x-axis runs left to right and the y-axis runs up and down.", "The axes cross at the origin, the point 0, 0."], ["Where do the x-axis and y-axis meet?"]),
+      t("9m-coord-2", "Plotting a point", ["The coordinates 3, 2 mean 3 along the x-axis and 2 up the y-axis.", "The x coordinate is always said first."], ["Which coordinate do we say first?"]),
+      t("9m-coord-3", "Quadrants", ["The axes divide the plane into four quadrants.", "In the first quadrant, both coordinates are positive."], ["In which quadrant is the point 2, 5?"]),
+    ],
+  },
 ];
 
 const words = (s) => s.toLowerCase().split(" ").filter((w) => w.length > 3);
@@ -217,13 +313,15 @@ function bestByName(pool, spoken) {
 
 export const Curriculum = {
   SUBJECT,
+  subjects: [SUBJECT, MATHS],
   coveredClasses: [6, 7, 9],
   chapters,
-  forClass: (c) => chapters.filter((x) => x.classNum === c).sort((a, b) => a.number - b.number),
+  /** A class's chapters in contents order; only one subject's when `subject` is given. */
+  forClass: (c, subject = null) => chapters.filter((x) => x.classNum === c && (!subject || x.subject === subject)).sort((a, b) => a.number - b.number),
   chapter: (id) => chapters.find((x) => x.id === id) || null,
   topic: (id) => chapters.flatMap((c) => c.topics).find((x) => x.id === id) || null,
   chapterOfTopic: (id) => chapters.find((c) => c.topics.some((x) => x.id === id)) || null,
   /** Match a spoken chapter name to the curriculum tree (AC-44.2). */
-  findChapter(classNum, spoken) { return bestByName(classNum != null ? this.forClass(classNum) : chapters, spoken); },
+  findChapter(classNum, spoken, subject = null) { return bestByName(chapters.filter((x) => (classNum == null || x.classNum === classNum) && (!subject || x.subject === subject)), spoken); },
   findTopic(chapter, spoken) { return bestByName(chapter ? chapter.topics : chapters.flatMap((c) => c.topics), spoken); },
 };

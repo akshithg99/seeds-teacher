@@ -116,7 +116,7 @@ test("tabs parse and change summary", () => {
 // ---------------------------------------------------------------- engine: tabs, suggestions, undo
 
 async function openSyncedTik() {
-  await go("plan", "c6", "6-magnets", "6-magnets-2", "yes");
+  await go("plan", "c6", "Science", "6-magnets", "6-magnets-2", "yes");
   assert.equal(id(), "plan_review");
   await go("tik");
   assert.equal(id(), "tik_view");
@@ -198,7 +198,7 @@ test("Course questions can be used as they are, with no approval (FR-111)", asyn
 
 test("audio that cannot play falls back to teacher-led in one step (FR-38)", async () => {
   e.audio = { ...noAudio, play: () => false };
-  await go("plan", "c6", "6-magnets", "6-magnets-1", "yes", "tik", "use_as_is"); // a topic with Content Studio audio
+  await go("plan", "c6", "Science", "6-magnets", "6-magnets-1", "yes", "tik", "use_as_is"); // a topic with Content Studio audio
   await e.choose("approve", Source.BUTTON, true); // questions
   await e.choose("use", Source.BUTTON); // audio from Content Studio
   await go("open", "start", "audio");
@@ -224,7 +224,7 @@ test("opening requests offline", async () => {
   const o = opening("plan seventh class science for tomorrow");
   assert.equal(o.intent, "plan");
   assert.equal(o.classNum, 7);
-  const r = await e.fillDetails(o.intent, o.classNum, o.chapter, null, Source.VOICE);
+  const r = await e.fillDetails(o.intent, o.classNum, o.chapter, null, Source.VOICE, o.subject);
   assert.ok(r.startsWith("Class 7, science. "), r);
   await e.fillDetails("next", null, null, null, Source.VOICE);
   assert.equal(id(), "next_class");
