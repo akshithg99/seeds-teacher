@@ -28,7 +28,7 @@ class Draft {
   constructor() {
     this.classNum = null; this.subject = null; this.subjectNext = null; this.chapterId = null; this.topicId = null; this.lessonId = null;
     this.sessionId = null; this.recordId = null; this.quizId = null; this.patternId = null; this.quizTopics = []; this.quizUntil = null;
-    this.wsKind = null; this.wsItem = null;
+    this.wsKind = null; this.wsItem = null; this.histClass = null; this.histSubject = null;
     this.changeCount = 0; this.tries = 0; this.checkpointFor = "tik"; this.lcQueue = []; this.lcIndex = 0;
     this.audioClipId = null; this.justSignedIn = false; this.langFor = null; this.langNext = null;
   }
@@ -622,17 +622,24 @@ export class Engine {
    * the class has taken it. A TIK is counted once per lesson; a follow-up is its own lesson.
    */
   history() {
-    const tiks = this.st.lessons.filter((l) => this.ready(l)).map((l) => {
+    const d = this.draft;
+    const shown = (classNum, subject) => (d.histClass == null || classNum === d.histClass) && (!d.histSubject || subject === d.histSubject);
+    const tiks = this.st.lessons.filter((l) => this.ready(l) && shown(l.classNum, l.subject)).map((l) => {
       const ended = this.st.sessions.filter((s) => s.lessonId === l.id && s.endedAt != null);
       const status = this.taught(l) ? "Taught completely"
         : ended.length ? `Taught partly: the next class starts at ${this.resumeName(l)}` : "Not taught yet";
       return { id: `ht:${l.id}`, title: this.lessonName(l), status, done: this.taught(l), started: ended.length > 0 };
     });
-    const quizzes = this.st.quizzes.filter((q) => q.state !== "Draft").map((q) => ({
+    const quizzes = this.st.quizzes.filter((q) => q.state !== "Draft" && shown(q.classNum, (Curriculum.chapter(q.chapterId) || {}).subject)).map((q) => ({
       id: `hq:${q.id}`, title: this.quizName(q),
       status: q.state === "Closed" ? `Taken: ${this.quizStats(q).responses} answers` : q.state === "Live" ? `Being taken: open on IVR until ${q.openUntil}` : "Not taken yet",
       taken: q.state === "Closed" }));
     return { tiks, quizzes };
+  }
+  /** "class 7 maths", "class 7", "maths", or "" when History shows everything. */
+  historyFilterText() {
+    const d = this.draft;
+    return [d.histClass != null ? `class ${d.histClass}` : "", d.histSubject ? d.histSubject.toLowerCase() : ""].filter(Boolean).join(" ");
   }
   workspaceItem(key) { const w = this.workspace(); return [...w.tiks, ...w.audio, ...w.quizzes].find((x) => x.key === key) || null; }
 
@@ -784,9 +791,17 @@ export class Engine {
 
       case "history":
         if (c === "followups") this.go("followups");
+        if (c === "filter") this.go("history_class");
+        if (c === "clear_filter") { d.histClass = null; d.histSubject = null; this.go("history"); return "Showing everything."; }
         if (c.startsWith("ht:")) { d.lessonId = c.slice(3); this.go("history_tik"); }
         if (c.startsWith("hq:")) { d.quizId = c.slice(3); this.go("history_quiz"); }
         break;
+      case "history_class": d.histClass = c === "all" ? null : parseInt(c.slice(1), 10); this.go("history_subject"); break;
+      case "history_subject": {
+        d.histSubject = c === "all" ? null : c;
+        this.go("history");
+        return `Showing ${this.historyFilterText() || "everything"}.`;
+      }
       case "history_tik":
         if (c === "teach") this.go("teach_start");
         if (c === "history_back") this.go("history");

@@ -461,6 +461,20 @@ test("History lists approved TIKs with how much is taught, and approved quizzes 
   assert.ok(e.step.sections.some((x) => x.heading === "Answer key"));
   assert.deepEqual(e.step.choices.map((c) => c.id), ["live_quiz", "history_back"]);
   await choose("history_back");
+  // filter by class and subject; the filter stays while items are opened
+  await choose("filter"); await choose("c7"); await choose("all");
+  assert.equal(e.step.question, "Open follow-ups and class records, or go back to Home?");
+  assert.deepEqual(e.step.sections.at(-1).lines, ["Nothing approved for class 7 yet."]);
+  assert.deepEqual(e.step.known, [["Showing", "Class 7"]]);
+  await choose("filter"); await choose("c6"); await choose("Maths");
+  assert.deepEqual(lines("TIKs").concat(lines("Quizzes")), []);
+  await choose("filter"); await choose("c6"); await choose("Science");
+  assert.equal(lines("TIKs").length + lines("Quizzes").length, 2);
+  assert.match(e.step.announce, /^Showing class 6 science\. /);
+  await choose(e.step.choices.find((c) => c.label.startsWith("Quiz: ")).id); await choose("history_back");
+  assert.deepEqual(e.step.known, [["Showing", "Class 6 science"]]);
+  assert.equal(await choose("clear_filter"), "Showing everything.");
+  assert.deepEqual(e.step.known, []);
   await choose("followups");
   assert.equal(id(), "followups");
 });

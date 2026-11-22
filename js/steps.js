@@ -585,18 +585,36 @@ export function buildStep(e) {
     // ======================================================== History
     case "history": {
       const h = e.history();
+      const only = e.historyFilterText();
       const count = (xs, test) => xs.filter(test).length;
       const talk = [
+        ...(only ? [`Showing ${only}.`] : []),
         h.tiks.length ? `${plural(h.tiks.length, "approved TIK", "approved TIKs")}: ${count(h.tiks, (x) => x.done)} taught completely, ${count(h.tiks, (x) => x.started && !x.done)} taught partly, ${count(h.tiks, (x) => !x.started)} not taught yet.` : "No approved TIKs yet.",
         h.quizzes.length ? `${plural(h.quizzes.length, "approved quiz", "approved quizzes")}: ${count(h.quizzes, (x) => x.taken)} taken, ${count(h.quizzes, (x) => !x.taken)} not taken yet.` : "No approved quizzes yet.",
       ];
       const followups = choice("followups", "Follow-ups and class records", { words: ["follow ups", "follow-ups", "class records", "records"] });
+      const filters = [choice("filter", only ? "Change the filter" : "Filter by class and subject", { words: ["filter", "change the filter", "filter by class", "show only"] }),
+        ...(only ? [choice("clear_filter", "Show everything", { words: ["show everything", "clear filter", "show all", "all"] })] : [])];
       // each approved TIK and quiz opens, with its status in its name
       const items = [...h.tiks.map((x) => choice(x.id, `TIK: ${x.title} · ${x.status}`, { words: [x.title.toLowerCase()] })),
         ...h.quizzes.map((x) => choice(x.id, `Quiz: ${x.title} · ${x.status}`, { words: [x.title.toLowerCase()] }))];
       return makeStep("history", Flow.HISTORY, "History", items.length ? "Which one would you like to open?" : "Open follow-ups and class records, or go back to Home?",
-        items.length ? paged(items, r.page) : [followups, homeBtn()], { announce: talk.join(" "), secondary: items.length ? [followups, homeBtn()] : [],
-          sections: items.length ? [] : [section("Nothing yet", ["A TIK shows here once it is approved, or used as it is from Content Studio. A quiz shows here once it is approved."])] });
+        items.length ? paged(items, r.page) : [...filters, followups, homeBtn()], { announce: talk.join(" "), secondary: items.length ? [...filters, followups, homeBtn()] : [],
+          known: only ? [["Showing", only.replace(/^./, (x) => x.toUpperCase())]] : [],
+          sections: items.length ? [] : [section("Nothing yet", [only ? `Nothing approved for ${only} yet.` : "A TIK shows here once it is approved, or used as it is from Content Studio. A quiz shows here once it is approved."])] });
+    }
+
+    case "history_class":
+      return makeStep("history_class", Flow.HISTORY, "Filter History", "Which class?", [
+        ...Curriculum.coveredClasses.map((c) => choice(`c${c}`, `Class ${c}`, { words: [`class ${c}`, `${c}`, numberWord(c), `grade ${c}`] })),
+        choice("all", "All classes", { words: ["all", "all classes", "every class"] }),
+      ]);
+
+    case "history_subject": {
+      return makeStep("history_subject", Flow.HISTORY, "Filter History", "Which subject?", [
+        ...Curriculum.subjects.map((s) => choice(s, s, { words: [s.toLowerCase(), ...(s === "Maths" ? ["math", "mathematics"] : [])] })),
+        choice("all", "All subjects", { words: ["all", "all subjects", "both"] }),
+      ], { known: d.histClass != null ? [["Class", `${d.histClass}`]] : [] });
     }
 
     case "history_tik": {
