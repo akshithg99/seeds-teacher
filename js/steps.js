@@ -6,7 +6,7 @@ import { TikTabs } from "./tiktabs.js";
 const NOT_APPROVED = "Created by SEEDS PROJECT-B — not yet approved";
 const PLAN_STAGES = ["Lesson", "TIK", "Questions", "Audio", "Ready"];
 // what a teacher can say about a recording; the voice button pauses the audio first
-const AUDIO_HELP = "While the audio plays, press the voice button and say: pause, play, back 30 seconds, forward 1 minute, jump to minute 20, or from the beginning.";
+const AUDIO_HELP = "While the audio plays, press the voice button and say: pause, play, back 30 seconds, forward 1 minute, jump to minute 20, from the beginning, faster, slower, or speed 1.5.";
 const PERIOD_MINUTES = 40; // shortcut: a fixed period length, until the teacher's timetable gives the real one
 const planProgress = (stage) => ({ labels: PLAN_STAGES, current: stage });
 const numberWord = (n) => ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] || String(n);

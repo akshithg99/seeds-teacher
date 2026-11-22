@@ -1,5 +1,5 @@
 import { Curriculum, DemoAccounts, LANGS } from "./data.js";
-import { Tier, Source, Flow, makeStep, choice, allChoices, spoken, optionsPhrase, inLang } from "./step.js";
+import { Tier, Source, Flow, makeStep, choice, allChoices, spoken, optionsPhrase, inLang, AUDIO_SPEEDS } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
 import * as Offline from "./offline.js";
 import { buildStep } from "./steps.js";
@@ -288,6 +288,15 @@ export class Engine {
       default:
         if (name.startsWith("tab:") && s.tik) return this.selectTab(parseInt(name.slice(4), 10) || 0);
         if (name === "audio_play" || name.startsWith("seek")) { const r = this.audioGo(name); this.notify(source); return r; }
+        if (name.startsWith("rate:")) {
+          // "faster", "slower", "speed 1.5": set it, then carry on playing at that speed
+          const cur = AUDIO_SPEEDS.indexOf(this.st.audioRate || 1), v = name.slice(5);
+          const i = v === "up" ? cur + 1 : v === "down" ? cur - 1 : AUDIO_SPEEDS.indexOf(Number(v));
+          if (i < 0) return "That is already the slowest speed, half speed.";
+          if (i >= AUDIO_SPEEDS.length) return "That is already the fastest speed, 2 times.";
+          this.setAudioSpeed(AUDIO_SPEEDS[i]);
+          const r = this.audioGo("audio_play"); this.notify(source); return r;
+        }
         return "";
     }
   }
@@ -623,6 +632,9 @@ export class Engine {
     }
     return "";
   }
+
+  /** The lesson audio's speed, kept on this device. */
+  setAudioSpeed(r) { if (this.audio.setRate) this.audio.setRate(r); this.setPref("audioRate", r); }
 
   /** Content Studio's audio for a chapter: its recording. */
   syncedClip(ch) {

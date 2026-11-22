@@ -24,6 +24,9 @@ export const choice = (id, label, o = {}) => ({ id, label, tier: Tier.MOVE, word
 export const section = (heading, lines, o = {}) => ({ heading, lines, emphasis: false, lang: null, ...o });
 
 /** FR-97 step description. Every screen is built from one of these; the agent works from it, never from the layout. */
+/** Lesson audio speeds, slowest first (player pop-up and voice). */
+export const AUDIO_SPEEDS = [0.5, 1, 1.25, 1.5, 2];
+
 export const makeStep = (id, flow, title, question, choices, o = {}) => ({
   id, flow, title, question, choices,
   announce: null, banner: null, known: [], sections: [], secondary: [], freeSpeech: null,

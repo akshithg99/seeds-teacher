@@ -235,6 +235,15 @@ test("in class, voice moves around the recording, and the next class carries on 
   say("jump to minute 20");
   assert.equal(rec.pos, 1200);
   const dur = e.audioClip().durationSec;
+  // speed by voice: it carries on playing at the new speed, which is kept
+  rec.setRate = (r) => { rec.rate = r; };
+  say("pause");
+  assert.equal(say("faster"), "");
+  assert.ok(rec.playing && rec.rate === 1.25 && e.st.audioRate === 1.25);
+  say("speed 2");
+  assert.equal(say("faster"), "That is already the fastest speed, 2 times.");
+  say("normal speed");
+  assert.equal(e.st.audioRate, 1);
   assert.equal(say("go to minute 500"), `The recording is only ${Math.round(dur / 60)} minutes long.`);
   assert.equal(rec.pos, 1200);
   await go("back"); // stopping saves the place
@@ -271,6 +280,15 @@ test("spoken audio controls", () => {
   assert.equal(m("resume"), "audio_play");
   assert.equal(m("back"), "back"); // still the Back command
   assert.equal(m("back banana seconds"), "none");
+  assert.equal(m("speed 1.5"), "rate:1.5");
+  assert.equal(m("set the speed to 1.25x"), "rate:1.25");
+  assert.equal(m("play at 2x"), "rate:2");
+  assert.equal(m("one and a half times"), "rate:1.5");
+  assert.equal(m("normal speed"), "rate:1");
+  assert.equal(m("half speed"), "rate:0.5");
+  assert.equal(m("faster"), "rate:up");
+  assert.equal(m("slow down"), "rate:down");
+  assert.equal(m("speed 3"), "none");
   assert.notEqual(match("back 30 seconds", e.step, null).name, "seek:-30"); // only on the audio screens
 });
 

@@ -1,4 +1,4 @@
-import { Source, Tier, Flow, stripLang, langCode, spoken } from "./step.js";
+import { Source, Tier, Flow, stripLang, langCode, spoken, AUDIO_SPEEDS } from "./step.js";
 import { TikTabs } from "./tiktabs.js";
 import { LANGS, Curriculum } from "./data.js";
 import { KEY_REJECTED } from "./claude.js";
@@ -277,7 +277,6 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
 
   // ------------------------------------------------------------------ settings
   // ------------------------------------------------------------------ audio player popup
-  const SPEEDS = [0.5, 1, 1.25, 1.5, 2];
   const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   let ptimer = null;
   pdlg.addEventListener("close", () => { clearInterval(ptimer); ptimer = null; });
@@ -291,7 +290,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     const back = h("button", { class: "btn", type: "button", "aria-label": "Back 30 seconds", onclick: () => { player.seekBy(-30); update(); } }, "−30 s");
     const fwd = h("button", { class: "btn", type: "button", "aria-label": "Forward 30 seconds", onclick: () => { player.seekBy(30); update(); } }, "+30 s");
     const playBtn = h("button", { class: "btn yes pplay", type: "button", onclick: () => { if (player.hasMedia()) player.toggle(); else engine.command("audio_play", Source.BUTTON); update(); } });
-    const speeds = SPEEDS.map((r) => h("button", { class: "btn", type: "button", onclick: () => { player.setRate(r); engine.setPref("audioRate", r); update(); } }, `${r}×`));
+    const speeds = AUDIO_SPEEDS.map((r) => h("button", { class: "btn", type: "button", onclick: () => { engine.setAudioSpeed(r); update(); } }, `${r}×`));
     function update() {
       const has = player.hasMedia(), pos = has ? player.position() : engine.audioAt(engine.lesson(), clip), dur = (has && player.duration()) || clip.durationSec;
       time.textContent = `${mmss(pos)} / ${mmss(dur)}`;
@@ -301,7 +300,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
       bar.disabled = !player.canSeek();
       for (const b of [back, fwd]) b.setAttribute("aria-disabled", player.canSeek() ? "false" : "true");
       playBtn.textContent = player.isPlaying() ? "Pause" : "Play";
-      speeds.forEach((b, i) => b.setAttribute("aria-pressed", String(player.rate === SPEEDS[i])));
+      speeds.forEach((b, i) => b.setAttribute("aria-pressed", String(player.rate === AUDIO_SPEEDS[i])));
     }
     pdlg.replaceChildren(
       h("div", { class: "head" }, h("h2", { id: "player-title" }, "Audio player"), h("button", { class: "btn", type: "button", onclick: () => pdlg.close() }, "Close")),

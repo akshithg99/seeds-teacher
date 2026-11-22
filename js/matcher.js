@@ -120,12 +120,24 @@ function amount(w) {
   return tens[a] && ones.indexOf(b) > 0 && ones.indexOf(b) < 10 ? tens[a] + ones.indexOf(b) : NaN;
 }
 
-/** Spoken audio controls -> "audio_pause", "audio_play", "seek:<±seconds>" or "seekto:<seconds>"; null when it is not one. */
+const SPEEDS = { "0 5": 0.5, "point 5": 0.5, "point five": 0.5, "zero point five": 0.5, half: 0.5,
+  "1": 1, one: 1, normal: 1, regular: 1,
+  "1 25": 1.25, "one point two five": 1.25, "1 point 25": 1.25, "one and a quarter": 1.25,
+  "1 5": 1.5, "one point five": 1.5, "1 point 5": 1.5, "one and a half": 1.5,
+  "2": 2, two: 2, double: 2 };
+
+/** Spoken audio controls -> "audio_pause", "audio_play", "seek:<±seconds>", "seekto:<seconds>" or "rate:<speed|up|down>"; null when it is not one. */
 export function audioCommand(t) {
   t = t.replace(/^please /, "").replace(/ please$/, "").replace(/\bhalf a minute\b/, "30 seconds");
   if (/^(pause|pause it|pause the audio|pause the recording|hold on|wait)$/.test(t)) return "audio_pause";
   if (/^(play|play it|resume|continue|carry on|play the audio|resume the audio|keep playing)$/.test(t)) return "audio_play";
   if (/^(from the (beginning|start)|start (again|over)|restart|play from the (beginning|start))$/.test(t)) return "seekto:0";
+  if (/^(?:play )?(faster|speed up|speed it up|quicker|play it faster)$/.test(t)) return "rate:up";
+  if (/^(?:play )?(slower|slow down|slow it down|play it slower)$/.test(t)) return "rate:down";
+  // "speed 1.5" is "speed 1 5" after normalising; "play at 2x", "one and a half times", "normal speed"
+  const sp = t.match(/^(?:(?:set|change) (?:the )?)?(?:playback )?speed(?: to| at)? (.+?)(?: ?x| times)?$/)
+    || t.match(/^(?:play )?(?:at )?(.+?)(?: ?x| times)(?: speed)?$/) || t.match(/^(?:play )?(?:at )?(normal|regular|half|double) speed$/);
+  if (sp) { const r = SPEEDS[sp[1]]; if (r) return `rate:${r}`; }
   const unit = (u) => (u.startsWith("min") ? 60 : 1);
   let m = t.match(/^(?:go |skip |jump |move )?(back|backward|backwards|rewind|forward|forwards|ahead|fast forward)(?: by)? ([a-z0-9]+(?: [a-z]+)?) (seconds?|secs?|minutes?|mins?)$/);
   if (m) { const n = amount(m[2]); if (!isNaN(n)) return `seek:${/back|rewind/.test(m[1]) ? -n * unit(m[3]) : n * unit(m[3])}`; }
