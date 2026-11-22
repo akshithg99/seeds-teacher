@@ -58,8 +58,8 @@ export function buildStep(e) {
   const l = e.lesson(), ch = e.chapterOf(l), tp = e.topicOf(l);
   const lang = l ? e.classLang(l.classNum) : null;
   // a lesson is for the whole chapter; only a follow-up names its topic
-  const learn = l && l.followUpFor && tp ? tp.definitions : ch ? ch.topics.map((t) => `${t.name}: ${t.definitions[0]}`) : [];
-  const lessonKnown = l ? [["Class", `${l.classNum}`], ["Subject", l.subject], ["Chapter", `${ch && ch.number}. ${ch && ch.name}`], ...(tp && l.followUpFor ? [["Topic", tp.name]] : []), ...(lang ? [["Language", lang]] : [])] : [];
+  const learn = ch ? ch.topics.map((t) => `${t.name}: ${t.definitions[0]}`) : [];
+  const lessonKnown = l ? [["Class", `${l.classNum}`], ["Subject", l.subject], ["Chapter", `${ch && ch.number}. ${ch && ch.name}`], ...(l.followUpFor ? [["Follow-up on", ((e.st.patterns.find((x) => x.id === l.followUpFor) || {}).concept) || (tp && tp.name) || ""]] : []), ...(lang ? [["Language", lang]] : [])] : [];
 
   switch (r.id) {
     // ======================================================== platform
@@ -246,7 +246,7 @@ export function buildStep(e) {
       const panel = l && l.tik ? tikPanel(e, l.tik, l.tikBefore, { APPROVED: "Approved", SYNCED_IN_USE: "In use as it is" }[l.tikState] || "Not yet approved") : null;
       const has = panel && panel.suggestions.length;
       const choices = isDraft ? [
-        choice("approve", "Approve", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve this ${l.tik.scope} TIK for ${(l.followUpFor && tp ? tp : ch).name}, so it can be used in class.` }),
+        choice("approve", "Approve", { tier: Tier.COMMIT, words: ["approve"], commitWord: "approve", readBack: `I'll approve this ${l.tik.scope} TIK for ${ch.name}, so it can be used in class.` }),
         ...(has ? [choice("apply_suggestions", "Apply suggested changes", { words: ["apply", "apply suggestions", "suggested changes", "accept"] })] : []),
         choice("change", "Ask for a change", { words: ["change", "ask for a change", "edit"] }),
         choice("regenerate", "Try again", { words: ["try again", "regenerate", "again", "new version"] }),

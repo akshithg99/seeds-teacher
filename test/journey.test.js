@@ -126,6 +126,11 @@ test("full journey, offline", async () => {
   assert.equal(id(), "tik_review");
   assert.equal(e.lesson().tikState, "DRAFT");
   assert.ok(e.lesson().followUpFor);
+  // the follow-up TIK is for the whole chapter too, made simpler
+  assert.equal(e.lesson().tik.scope, "chapter");
+  assert.deepEqual(e.lesson().tik.concepts.map((c) => c.topic), Curriculum.chapter("6-magnets").topics.map((t) => t.name));
+  assert.ok(e.lesson().tik.objectives.every((o) => o.startsWith("In simple words")));
+  assert.equal(e.lessonName(e.lesson()), "Class 6 Science, Exploring Magnets (follow-up on North and south poles)");
 });
 
 test("a repeated commit applies once (FR-103)", async () => {
