@@ -254,6 +254,14 @@ test("in class, voice moves around the recording, and the next class carries on 
   assert.equal(id(), "audio_player");
   assert.ok(rec.playing && rec.at === 1170);
   rec.pos = 1200; await go("back");
+  // and from the learning check
+  await go("lc");
+  assert.equal(id(), "lc_read");
+  assert.match(e.step.help, /jump to minute 20/);
+  say("jump to minute 5");
+  assert.equal(id(), "audio_player");
+  assert.ok(rec.playing && rec.at === 300);
+  rec.pos = 1200; await go("back");
   // the next class: the recording carries on from there
   await go("audio");
   assert.deepEqual(e.step.known.at(-1), ["Carries on from", "20:00, where you stopped"]);

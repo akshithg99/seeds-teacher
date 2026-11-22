@@ -623,7 +623,7 @@ export class Engine {
     if (to != null && !clip.src) return "Moving around works only in recordings.";
     if (to != null && to >= dur) return `The recording is only ${Math.round(dur / 60)} minutes long.`;
     const start = to != null ? Math.max(0, to) : finished ? 0 : pos;
-    if (this.route.id === "teach_step") { const s = this.session(); if (s) this.updateSession(s.id, (x) => ({ ...x, methods: [...x.methods, "audio"] })); this.draft.audioClipId = clip.id; }
+    if (this.route.id === "teach_step" || this.route.id === "lc_read") { const s = this.session(); if (s) this.updateSession(s.id, (x) => ({ ...x, methods: [...x.methods, "audio"] })); this.draft.audioClipId = clip.id; }
     if (this.route.id !== "audio_player") this.go("audio_player");
     if (!has) {
       if (!this.audio.play(clip, () => this.onAudioFinished(), () => this.onAudioFailed(), start)) { this.onAudioFailed(); return "Audio is not playing."; }

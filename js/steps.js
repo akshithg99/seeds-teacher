@@ -429,14 +429,15 @@ export function buildStep(e) {
         { inClass: true, freeSpeech: { prompt: "For example: teacher absent for half the period", longWindow: true } });
 
     case "lc_read": {
-      const sets = l ? l.questionSets.filter((q) => q.approved && q.check.length) : [];
+      const sets = l ? l.questionSets.filter((q) => q.approved && q.check.length) : [], hasAudio = !!l && e.approvedAudio(l).length > 0;
       return makeStep("lc_read", Flow.TEACH, "Learning check", "Shall I read the questions to the class?", [
         choice("read", "Read them aloud", { tier: Tier.READ, words: ["read", "yes", "read them", "read the questions"] }),
         choice("back", "Back to lesson", { words: ["back", "back to lesson"] }),
         choice("end", "End class", { tier: Tier.COMMIT, words: ["end class", "end"], commitWord: "end class", readBack: "I'll end the class and ask what was covered." }),
       ], { inClass: true, announce: "Ask the class these questions, or I can read them aloud. Students answer aloud.", contentLang: sets[0] && sets[0].lang,
         sections: sets.map((q) => section(q.title, q.check, { lang: q.lang })),
-        help: "This is ungraded and for the whole class. Nothing about individual students is stored." });
+        audio: hasAudio, // "jump to minute 20" here opens the audio and plays from there
+        help: "This is ungraded and for the whole class. Nothing about individual students is stored." + (hasAudio ? " For the lesson audio: " + AUDIO_HELP : "") });
     }
 
     case "lc_ask": {
