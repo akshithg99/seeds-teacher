@@ -590,13 +590,34 @@ export function buildStep(e) {
         h.tiks.length ? `${plural(h.tiks.length, "approved TIK", "approved TIKs")}: ${count(h.tiks, (x) => x.done)} taught completely, ${count(h.tiks, (x) => x.started && !x.done)} taught partly, ${count(h.tiks, (x) => !x.started)} not taught yet.` : "No approved TIKs yet.",
         h.quizzes.length ? `${plural(h.quizzes.length, "approved quiz", "approved quizzes")}: ${count(h.quizzes, (x) => x.taken)} taken, ${count(h.quizzes, (x) => !x.taken)} not taken yet.` : "No approved quizzes yet.",
       ];
-      return makeStep("history", Flow.HISTORY, "History", "Open follow-ups and class records, or go back to Home?", [
-        choice("followups", "Follow-ups and class records", { words: ["follow ups", "follow-ups", "class records", "records"] }), homeBtn(),
-      ], { announce: talk.join(" "),
-        sections: [
-          section("TIKs", h.tiks.length ? h.tiks.map((x) => `${x.title} · ${x.status}`) : ["None approved yet. A TIK shows here once it is approved, or used as it is from Content Studio."]),
-          section("Quizzes", h.quizzes.length ? h.quizzes.map((x) => `${x.title} · ${x.status}`) : ["None approved yet."]),
-        ] });
+      const followups = choice("followups", "Follow-ups and class records", { words: ["follow ups", "follow-ups", "class records", "records"] });
+      // each approved TIK and quiz opens, with its status in its name
+      const items = [...h.tiks.map((x) => choice(x.id, `TIK: ${x.title} · ${x.status}`, { words: [x.title.toLowerCase()] })),
+        ...h.quizzes.map((x) => choice(x.id, `Quiz: ${x.title} · ${x.status}`, { words: [x.title.toLowerCase()] }))];
+      return makeStep("history", Flow.HISTORY, "History", items.length ? "Which one would you like to open?" : "Open follow-ups and class records, or go back to Home?",
+        items.length ? paged(items, r.page) : [followups, homeBtn()], { announce: talk.join(" "), secondary: items.length ? [followups, homeBtn()] : [],
+          sections: items.length ? [] : [section("Nothing yet", ["A TIK shows here once it is approved, or used as it is from Content Studio. A quiz shows here once it is approved."])] });
+    }
+
+    case "history_tik": {
+      const hx = e.history().tiks.find((x) => x.id === `ht:${l && l.id}`);
+      if (!l || !l.tik || !hx) return makeStep("history_tik", Flow.HISTORY, "Not found", "It's no longer in your history.", [choice("history_back", "Back to History")]);
+      return makeStep("history_tik", Flow.HISTORY, "TIK", hx.done ? "Back to History?" : `${e.resumeAt(l) ? "Continue teaching" : "Teach it"}, or back to History?`, [
+        ...(hx.done ? [] : [choice("teach", e.resumeAt(l) ? "Continue teaching" : "Teach it", { words: ["teach", "teach it", "continue", "continue teaching"] })]),
+        choice("history_back", "Back to History", { words: ["back", "history", "back to history"] }),
+      ], { announce: `${hx.title}. ${hx.status}. Say next tab, or a tab's name, to move through it.`, known: [...lessonKnown, ["Taught", hx.status]],
+        contentLang: l.tik.lang, tik: { tik: l.tik, before: null, suggestions: [], status: hx.status }, secondary: [homeBtn()], help: TIK_HELP });
+    }
+
+    case "history_quiz": {
+      const q = st.quizzes.find((x) => x.id === d.quizId);
+      const hx = q && e.history().quizzes.find((x) => x.id === `hq:${q.id}`);
+      if (!hx) return makeStep("history_quiz", Flow.HISTORY, "Not found", "It's no longer in your history.", [choice("history_back", "Back to History")]);
+      const next = { Approved: choice("share_quiz", "Share to IVR", { words: ["share", "share to ivr"] }), Live: choice("live_quiz", "See responses", { words: ["responses", "see responses"] }) }[q.state];
+      return makeStep("history_quiz", Flow.HISTORY, "Quiz", next ? `${next.label}, or back to History?` : "Back to History?", [
+        ...(next ? [next] : []), choice("history_back", "Back to History", { words: ["back", "history", "back to history"] }),
+      ], { announce: `${hx.title}. ${hx.status}.`, known: [...e.quizKnown(q), ["Taken", hx.status]], contentLang: q.lang, secondary: [homeBtn()],
+        sections: [...quizQuestions(e, q, true), answerKey(q), ...quizAnalytics(e, q)] });
     }
 
     // ======================================================== F10 Remediation

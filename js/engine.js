@@ -626,10 +626,10 @@ export class Engine {
       const ended = this.st.sessions.filter((s) => s.lessonId === l.id && s.endedAt != null);
       const status = this.taught(l) ? "Taught completely"
         : ended.length ? `Taught partly: the next class starts at ${this.resumeName(l)}` : "Not taught yet";
-      return { title: this.lessonName(l), status, done: this.taught(l), started: ended.length > 0 };
+      return { id: `ht:${l.id}`, title: this.lessonName(l), status, done: this.taught(l), started: ended.length > 0 };
     });
     const quizzes = this.st.quizzes.filter((q) => q.state !== "Draft").map((q) => ({
-      title: this.quizName(q),
+      id: `hq:${q.id}`, title: this.quizName(q),
       status: q.state === "Closed" ? `Taken: ${this.quizStats(q).responses} answers` : q.state === "Live" ? `Being taken: open on IVR until ${q.openUntil}` : "Not taken yet",
       taken: q.state === "Closed" }));
     return { tiks, quizzes };
@@ -782,7 +782,20 @@ export class Engine {
         }
         break;
 
-      case "history": if (c === "followups") this.go("followups"); break;
+      case "history":
+        if (c === "followups") this.go("followups");
+        if (c.startsWith("ht:")) { d.lessonId = c.slice(3); this.go("history_tik"); }
+        if (c.startsWith("hq:")) { d.quizId = c.slice(3); this.go("history_quiz"); }
+        break;
+      case "history_tik":
+        if (c === "teach") this.go("teach_start");
+        if (c === "history_back") this.go("history");
+        break;
+      case "history_quiz":
+        if (c === "share_quiz") this.go("quiz_window");
+        if (c === "live_quiz") this.go("quiz_live");
+        if (c === "history_back") this.go("history");
+        break;
 
       case "workspace":
         if (["tiks", "audio", "quizzes"].includes(c)) { d.wsKind = c; this.go("ws_list"); }

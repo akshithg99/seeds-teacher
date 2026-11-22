@@ -427,7 +427,8 @@ test("History lists approved TIKs with how much is taught, and approved quizzes 
   e.setClassLang(6, "English");
   for (const c of ["plan", "c6", "Science", "6-magnets", "yes", "tik", "use_as_is"]) await choose(c);
   await e.choose("approve", Source.BUTTON, true); // questions
-  const lines = (h) => e.step.sections.find((s) => s.heading === h).lines;
+  // each item is a button that opens it, with its status in its name
+  const lines = (h) => e.step.choices.filter((c) => c.label.startsWith(h === "TIKs" ? "TIK: " : "Quiz: ")).map((c) => c.label.replace(/^(TIK|Quiz): /, ""));
   await e.goTo(Flow.HISTORY, Source.BUTTON);
   assert.equal(id(), "history");
   assert.deepEqual(lines("TIKs"), ["Class 6 Science, Exploring Magnets · Not taught yet"]);
@@ -438,6 +439,14 @@ test("History lists approved TIKs with how much is taught, and approved quizzes 
   while (id() === "lc_ask") await choose("some");
   await e.goTo(Flow.HISTORY, Source.BUTTON);
   assert.deepEqual(lines("TIKs"), ["Class 6 Science, Exploring Magnets · Taught partly: the next class starts at Concept generation: Poles of a magnet"]);
+  // a TIK opens with its tabs, and a partly taught one can be continued from there
+  await choose(e.step.choices.find((c) => c.label.startsWith("TIK: ")).id);
+  assert.equal(id(), "history_tik");
+  assert.ok(e.step.tik && e.step.known.some(([k, v]) => k === "Taught" && v.startsWith("Taught partly")));
+  assert.deepEqual(e.step.choices.map((c) => c.id), ["teach", "history_back"]);
+  assert.equal(e.step.choices[0].label, "Continue teaching");
+  await choose("history_back");
+  assert.equal(id(), "history");
   // quizzes: only approved ones are listed, and taken once closed
   await e.goTo(Flow.QUIZ, Source.BUTTON);
   for (const c of ["plan", "c6", "Science", "6-magnets", "use_cs"]) await choose(c);
@@ -446,6 +455,12 @@ test("History lists approved TIKs with how much is taught, and approved quizzes 
   await e.goTo(Flow.HISTORY, Source.BUTTON);
   assert.deepEqual(lines("Quizzes"), ["Class 6 Science, Exploring Magnets · Being taken: open on IVR until Friday evening"]);
   assert.match(e.step.announce, /1 approved quiz: 0 taken, 1 not taken yet./);
+  // a quiz opens with its questions, answer key and how the class did
+  await choose(e.step.choices.find((c) => c.label.startsWith("Quiz: ")).id);
+  assert.equal(id(), "history_quiz");
+  assert.ok(e.step.sections.some((x) => x.heading === "Answer key"));
+  assert.deepEqual(e.step.choices.map((c) => c.id), ["live_quiz", "history_back"]);
+  await choose("history_back");
   await choose("followups");
   assert.equal(id(), "followups");
 });
