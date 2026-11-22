@@ -5,6 +5,7 @@ import { TikTabs } from "./tiktabs.js";
 
 const NOT_APPROVED = "Created by SEEDS PROJECT-B — not yet approved";
 const PLAN_STAGES = ["Lesson", "TIK", "Questions", "Audio", "Ready"];
+const PERIOD_MINUTES = 40; // shortcut: a fixed period length, until the teacher's timetable gives the real one
 const planProgress = (stage) => ({ labels: PLAN_STAGES, current: stage });
 const numberWord = (n) => ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] || String(n);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -419,9 +420,14 @@ export function buildStep(e) {
       // where the class stopped in the TIK, so the next class starts from there
       const steps = TikTabs.classSteps(l.tik), s = e.session();
       const i = Math.min((s && s.stepIndex) || 0, steps.length - 1);
+      // time left in the period and a step still to go: suggest carrying on instead of ending early
+      const left = s ? PERIOD_MINUTES - Math.floor((e.now() - s.startedAt) / 60000) : 0;
+      const nudge = left >= 5 && i < steps.length - 1;
       return makeStep("end_coverage", Flow.TEACH, "End class", `Did you finish this step: ${steps[i].name}?`,
-        [choice("done", "Yes, finished it", { words: ["yes", "finished", "done", "all covered"] }), choice("partway", "No, stopped partway", { words: ["no", "partway", "stopped", "some covered"] })],
-        { inClass: true, known: [["Lesson", e.lessonName(l)], ["Step", `${i + 1} of ${steps.length}`]] });
+        [choice("done", "Yes, finished it", { words: ["yes", "finished", "done", "all covered"] }), choice("partway", "No, stopped partway", { words: ["no", "partway", "stopped", "some covered"] }),
+          ...(nudge ? [choice("carry_on", "Carry on to the next step", { words: ["carry on", "continue", "keep going", "next step"] })] : [])],
+        { inClass: true, known: [["Lesson", e.lessonName(l)], ["Step", `${i + 1} of ${steps.length}`]],
+          announce: nudge ? `About ${left} minutes of the period are left. You could carry on with the next step: ${steps[i + 1].name}.` : null });
     }
 
     case "end_reason":

@@ -364,6 +364,16 @@ test("a class that stops partway through the TIK continues from the next topic; 
   assert.equal(e.step.title, "Step 5 of 7: Concept generation: Poles of a magnet");
   await choose("end", true);
   assert.equal(e.step.question, "Did you finish this step: Concept generation: Poles of a magnet?");
+  // time is left in the period, so the agent suggests carrying on; End class still works afterwards
+  assert.equal(e.step.announce, "About 40 minutes of the period are left. You could carry on with the next step: Concept generation: Attraction and repulsion.");
+  assert.equal(await choose("carry_on"), "Carrying on with Concept generation: Attraction and repulsion.");
+  assert.equal(e.step.title, "Step 6 of 7: Concept generation: Attraction and repulsion");
+  await choose("prev");
+  e.clock = () => clock + 41 * 60000; // the period is over: no suggestion
+  await choose("end", true);
+  assert.equal(id(), "end_coverage");
+  assert.ok(!e.step.choices.some((c) => c.id === "carry_on") && !e.step.announce);
+  e.clock = () => clock;
   await choose("partway");
   await choose("time");
   while (id() === "lc_ask") await choose("some");
@@ -380,6 +390,7 @@ test("a class that stops partway through the TIK continues from the next topic; 
   assert.equal(e.step.title, "Step 5 of 7: Concept generation: Poles of a magnet");
   await choose("next"); await choose("next");
   await choose("end", true);
+  assert.ok(!e.step.choices.some((c) => c.id === "carry_on")); // the last step has nothing to carry on to
   await choose("done");
   while (id() === "lc_ask") await choose("some");
   assert.ok(e.taught(e.lesson()));

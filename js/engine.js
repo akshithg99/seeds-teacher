@@ -1030,7 +1030,14 @@ export class Engine {
       case "end_coverage": {
         const s = this.session();
         const steps = TikTabs.classSteps(l.tik);
-        const next = Math.min(s.stepIndex, steps.length - 1) + (c === "done" ? 1 : 0);
+        if (c === "carry_on") {
+          this.updateSession(s.id, (x) => ({ ...x, stepIndex: x.stepIndex + 1 }));
+          // the class goes on, so End class must work again later in this class
+          this.store.update((x) => ({ ...x, committed: x.committed.filter((k) => !k.endsWith(`:end:${s.id}`)) }));
+          this.go("teach_step");
+          return `Carrying on with ${steps[Math.min(s.stepIndex + 1, steps.length - 1)].name}.`;
+        }
+        const next =Math.min(s.stepIndex, steps.length - 1) + (c === "done" ? 1 : 0);
         // covered in this class (from where it started): the overview if it did the key points, and each topic whose concept step it finished
         const from = s.from || 0, all = next >= steps.length;
         const ids = steps.map((x) => x.topic && (ch.topics.find((t) => t.name.toLowerCase() === x.topic.toLowerCase()) || {}).id);
