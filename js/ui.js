@@ -267,10 +267,12 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
       h("label", { class: "check" }, h("input", { type: "checkbox", id: "showpw", checked: ui.showPw, onchange: (ev) => { ui.showPw = ev.target.checked; pw.type = ui.showPw ? "text" : "password"; } }), "Show password"),
       h("label", { class: "check" }, remember, "Remember me on this device"),
       h("p", { class: "small" }, "Untick Remember me on a shared phone."),
-      h("button", { class: "choice primary", type: "submit" }, h("span", {}, "Log in"), h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      // the demo account button sits beside Log in, so testers fill and log in without scrolling
+      h("div", { class: "loginrow" },
+        h("button", { class: "btn", type: "button", onclick: () => { phone.value = "9000000001"; pw.value = "seeds123"; document.getElementById("login-btn").focus(); } }, "Fill in the demo account"),
+        h("button", { class: "choice primary", type: "submit", id: "login-btn" }, h("span", {}, "Log in"), h("span", { class: "chev", "aria-hidden": "true" }, "›"))),
       h("button", { class: "linkbtn", type: "button", onclick: () => { ui.signInErr = "To reset your password, ask your school admin. They will send new sign-in details by text message or a phone call."; ui.phone = phone.value; ui.signInDirty = true; render(); } }, "Forgot password?"),
-      h("div", { class: "demo" }, h("p", {}, h("strong", {}, "Prototype: "), "there are no real accounts yet. Use the demo teacher account. Everything you do stays in this browser."),
-        h("button", { class: "btn", type: "button", onclick: () => { phone.value = "9000000001"; pw.value = "seeds123"; phone.focus(); } }, "Fill in the demo account")),
+      h("div", { class: "demo" }, h("p", {}, h("strong", {}, "Prototype: "), "there are no real accounts yet. Use Fill in the demo account, next to Log in. Everything you do stays in this browser.")),
     );
     return [form];
   }
