@@ -82,14 +82,9 @@ main.shell { padding-block: 8px calc(var(--bottom, calc(var(--voice-h) + env(saf
 .known { margin: 10px 0; padding: 10px 14px; border-radius: var(--radius); background: var(--surface); display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; font-size: 1rem; }
 .known dt { color: var(--muted); }
 .known dd { margin: 0; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
-.titlerow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.titlerow .title { flex: 1; min-width: 0; }
 h1.title { font-size: clamp(1.6rem, 5vw, 2.1rem); line-height: 1.2; margin: 18px 0 6px; text-wrap: balance; }
 h1.title:focus { outline: none; }
 h1.title:focus-visible { outline: 3px solid var(--focus); }
-.listen { flex: none; margin-top: 16px; min-height: 48px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; border: 2px solid var(--soft-line); background: var(--soft); color: var(--on-soft); font-weight: 700; font-size: 1rem; cursor: pointer; }
-.listen:hover { border-color: var(--accent); }
-.listen svg { width: 20px; height: 20px; }
 .banner { display: inline-block; margin: 6px 0; padding: 4px 12px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-ink); font-weight: 700; font-size: .95rem; }
 .announce { margin: 8px 0 14px; color: var(--ink); overflow-wrap: anywhere; }
 .sec { margin: 14px 0; }
@@ -217,14 +212,17 @@ dialog.settings::backdrop { background: rgb(0 0 0 / .55); }
 code { font-family: ui-monospace, Consolas, monospace; font-size: .95em; }
 
 /* ---------------- screen sizes (FR-108): the same controls in the same order everywhere; only spacing and columns change */
-/* phones: icon-only Menu (its name stays for screen readers), a two-line title */
+/* phones: icon-only Listen and Menu (their names stay for screen readers), a two-line title */
 @media (max-width: 480px) {
   .iconbtn .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* four icon buttons and the preview badge must leave room for the screen name */
+  .topbar .shell { gap: 4px; }
+  .topbar .iconbtn { min-width: 44px; padding: 0 8px; }
+  .topbar .badge { max-width: 76px; text-align: center; line-height: 1.15; font-size: .75rem; padding: 3px 6px; }
   .topbar .flow { font-size: .95rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .mic { width: 56px; height: 56px; }
   .choice { min-height: 56px; }
   .choice.primary { min-height: 64px; font-size: 1.1rem; }
-  .listen { padding: 6px 12px; }
 }
 /* short screens (a phone held sideways): the header scrolls away and the bottom bar shrinks */
 @media (max-height: 520px) {

@@ -137,6 +137,8 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
       h("button", { class: "iconbtn", type: "button", "aria-label": "Back", "aria-disabled": engine.canGoBack ? null : "true", onclick: onBack }, svg(ICON.back)),
       badge(),
       h("div", { class: "flow" }, s.flow.label),
+      // Listen reads the screen aloud ("read out the content" by voice); like every button, it never starts listening
+      h("button", { class: "iconbtn", type: "button", onclick: () => voice.afterButton(engine.readScreen(), true) }, svg(ICON.speaker), h("span", { class: "label" }, "Listen")),
       h("button", { class: "iconbtn", type: "button", "aria-expanded": String(ui.navOpen), "aria-controls": "nav", onclick: () => { ui.navOpen = !ui.navOpen; renderTop(); } }, svg(ICON.menu), h("span", { class: "label" }, "Menu")),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Settings", onclick: openSettings }, svg(ICON.gear)),
     ));
@@ -209,9 +211,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     const kids = [];
     if (s.progress) kids.push(h("ol", { class: "stages", "aria-label": "Progress" }, s.progress.labels.map((x, i) => h("li", { class: i < s.progress.current ? "done" : null, "aria-current": i === s.progress.current ? "step" : null }, x))));
     if (s.known.length) kids.push(h("dl", { class: "known" }, s.known.map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])));
-    // Listen reads the screen aloud; like every button, it never starts listening
-    kids.push(h("div", { class: "titlerow" }, h("h1", { class: "title", tabindex: "-1", id: "step-title" }, s.title),
-      h("button", { class: "listen", type: "button", onclick: () => voice.afterButton(engine.readScreen(s), true) }, svg(ICON.speaker), "Listen")));
+    kids.push(h("h1", { class: "title", tabindex: "-1", id: "step-title" }, s.title));
     if (s.banner) kids.push(h("p", { class: "banner" }, s.banner));
     if (s.announce) kids.push(h("p", { class: "announce", lang: s.inClass && s.contentLang ? lc(s.contentLang) : null }, stripLang(s.announce)));
     if (s.contentLang && s.contentLang !== "English" && !hasVoice(s.contentLang)) kids.push(h("p", { class: "notice" }, `This device has no ${s.contentLang} voice, so the voice guide will not read the ${s.contentLang} text aloud. Add a ${s.contentLang} voice in the device's speech settings to hear it.`));
