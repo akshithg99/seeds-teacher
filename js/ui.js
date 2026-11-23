@@ -211,7 +211,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
     if (s.known.length) kids.push(h("dl", { class: "known" }, s.known.map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])));
     // Listen reads the screen aloud; like every button, it never starts listening
     kids.push(h("div", { class: "titlerow" }, h("h1", { class: "title", tabindex: "-1", id: "step-title" }, s.title),
-      h("button", { class: "listen", type: "button", onclick: () => voice.afterButton(spoken(s, true), true) }, svg(ICON.speaker), "Listen")));
+      h("button", { class: "listen", type: "button", onclick: () => voice.afterButton(engine.readScreen(s), true) }, svg(ICON.speaker), "Listen")));
     if (s.banner) kids.push(h("p", { class: "banner" }, s.banner));
     if (s.announce) kids.push(h("p", { class: "announce", lang: s.inClass && s.contentLang ? lc(s.contentLang) : null }, stripLang(s.announce)));
     if (s.contentLang && s.contentLang !== "English" && !hasVoice(s.contentLang)) kids.push(h("p", { class: "notice" }, `This device has no ${s.contentLang} voice, so the voice guide will not read the ${s.contentLang} text aloud. Add a ${s.contentLang} voice in the device's speech settings to hear it.`));

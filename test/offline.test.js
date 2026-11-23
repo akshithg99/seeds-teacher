@@ -282,7 +282,14 @@ test("read out the content: the Listen button by voice", async () => {
   const m = (t) => { const r = match(t, e.step, null); return r.type === "command" ? r.name : r.type; };
   for (const t of ["read out the content", "Can you read out the content?", "read the content", "read the screen", "please read this page",
     "read it out", "read everything on the screen", "read out what's on the screen", "read out", "what's on the screen", "could you read it aloud for me"]) assert.equal(m(t), "read_screen", t);
-  assert.equal(e.command("read_screen", Source.VOICE), spoken(e.step, true)); // the same as Listen
+  // the open TIK tab in full, not the summary, and the details at the top
+  e.selectTab(3);
+  const r = e.command("read_screen", Source.VOICE);
+  assert.ok(r.startsWith(e.step.title + ". "), r.slice(0, 80));
+  assert.ok(r.includes(TikTabs.spokenTab(e.step.tik, 3)));
+  assert.ok(!r.includes("In this TIK"));
+  for (const [k, v] of e.step.known) assert.ok(r.includes(`${k}: ${v}.`), k);
+  assert.ok(r.endsWith(spoken({ ...e.step, tik: null }, true)));
   assert.match(e.command("help", Source.VOICE), /read out the content/);
   // a plain "read" still picks the button that uses it (the learning check's Read them aloud)
   const lc = { choices: [{ id: "read", label: "Read them aloud", words: ["read", "yes", "read them", "read the questions"] }], secondary: [] };

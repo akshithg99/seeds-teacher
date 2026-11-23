@@ -265,7 +265,8 @@ export class Engine {
     const s = this.step;
     this.log("command", name, source);
     switch (name) {
-      case "repeat": case "read_screen": return spoken(s, true); // read_screen: the Listen button, by voice
+      case "repeat": return spoken(s, true);
+      case "read_screen": return this.readScreen(s); // the Listen button, by voice
       case "back": return this.back(source);
       case "where_am_i": return `You are in ${s.flow.label}: ${s.title}. ${s.question}`;
       case "what_did_you_do": return this.lastAction;
@@ -299,6 +300,13 @@ export class Engine {
         }
         return "";
     }
+  }
+
+  /** "Read out the content" and Listen: the title, the details at the top, the open TIK tab in full, then the rest of the screen. */
+  readScreen(s = this.step) {
+    const known = s.known.map(([k, v]) => `${k}: ${v}.`).join(" ");
+    const tab = s.tik ? TikTabs.spokenTab(s.tik, this.tikTab) : "";
+    return [`${s.title}.`, known, tab, spoken({ ...s, tik: null }, true)].filter(Boolean).join(" ");
   }
 
   /** Open a TIK tab; returns what the agent says (the tab's name and content). Wraps around at the ends. */
