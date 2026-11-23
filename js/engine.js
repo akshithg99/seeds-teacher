@@ -265,12 +265,12 @@ export class Engine {
     const s = this.step;
     this.log("command", name, source);
     switch (name) {
-      case "repeat": return spoken(s, true);
+      case "repeat": case "read_screen": return spoken(s, true); // read_screen: the Listen button, by voice
       case "back": return this.back(source);
       case "where_am_i": return `You are in ${s.flow.label}: ${s.title}. ${s.question}`;
       case "what_did_you_do": return this.lastAction;
       case "help": return (s.help ? s.help + " " : "") + optionsPhrase(s, true) +
-        " Any time, you can also say repeat, back, where am I, what did you just do, home, or stop." +
+        " Any time, you can also say read out the content, repeat, back, where am I, what did you just do, home, or stop." +
         (s.flow === Flow.TEACH ? " For the classroom speaker, connect it before class and set the volume high." : "");
       case "home": this.goHome(); this.notify(source); return "Home. " + spoken(this.step);
       case "voice_off": this.setVoiceGuide(false); return "Voice guide is off. Press the voice button when you need me.";

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { Engine, Store } from "../js/engine.js";
 import { ContentGenerator } from "../js/generator.js";
 import { Claude } from "../js/claude.js";
-import { Source } from "../js/step.js";
+import { Source, spoken } from "../js/step.js";
 import { match, opening } from "../js/matcher.js";
 import { TikTabs } from "../js/tiktabs.js";
 import { Curriculum } from "../js/data.js";
@@ -275,6 +275,18 @@ test("in class, voice moves around the recording, and the next class carries on 
   say("back 30 seconds");
   assert.equal(id(), "audio_player");
   assert.equal(rec.at, dur - 30);
+});
+
+test("read out the content: the Listen button by voice", async () => {
+  await openSyncedTik();
+  const m = (t) => { const r = match(t, e.step, null); return r.type === "command" ? r.name : r.type; };
+  for (const t of ["read out the content", "Can you read out the content?", "read the content", "read the screen", "please read this page",
+    "read it out", "read everything on the screen", "read out what's on the screen", "read out", "what's on the screen", "could you read it aloud for me"]) assert.equal(m(t), "read_screen", t);
+  assert.equal(e.command("read_screen", Source.VOICE), spoken(e.step, true)); // the same as Listen
+  assert.match(e.command("help", Source.VOICE), /read out the content/);
+  // a plain "read" still picks the button that uses it (the learning check's Read them aloud)
+  const lc = { choices: [{ id: "read", label: "Read them aloud", words: ["read", "yes", "read them", "read the questions"] }], secondary: [] };
+  for (const t of ["read", "read them", "read the questions"]) assert.deepEqual(match(t, lc, null), { type: "choose", choiceId: "read" }, t);
 });
 
 test("spoken audio controls", () => {

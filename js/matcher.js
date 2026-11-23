@@ -33,6 +33,14 @@ export const COMMANDS = {
   sign_out: ["sign out", "log out", "sign me out"],
 };
 
+// "read out the content", "can you read the screen", "read it out", "what's on the screen": the Listen button by voice.
+// It names what to read, so "read", "read them" and "read the questions" stay with the buttons that use them.
+const READ_SCREEN = [
+  /^(?:(?:can|could|would|will) you |please )?read (?:out |aloud )?(?:(?:all |all of )?(?:the|this|what's on the|what is on the|whats on the) )?(?:content|contents|screen|page|text|everything|it|this|all)(?: (?:out|aloud|for me|please|to me|on the screen|on screen))*$/,
+  /^(?:(?:can|could|would|will) you |please )?read (?:out|aloud)(?: please)?$/,
+  /^(?:what's|what is|whats) on (?:the |this )?(?:screen|page)$/,
+];
+
 const yes = new Set(["yes", "yes please", "yeah", "yep", "okay", "ok", "correct", "confirm", "sure", "haan", "ha"]);
 const cancel = new Set(["no", "cancel", "don't", "do not", "stop that", "no thanks", "nahi"]);
 
@@ -65,6 +73,7 @@ export function match(text, step, pending) {
   }
 
   for (const [name, phrases] of Object.entries(COMMANDS)) if (phrases.includes(t)) return { type: "command", name };
+  if (READ_SCREEN.some((r) => r.test(t))) return { type: "command", name: "read_screen" };
 
   // the audio screens: play, pause and moving around in a recording, before the buttons' own words ("play" is a toggle)
   if (step.audio) { const a = audioCommand(t); if (a) return { type: "command", name: a }; }
