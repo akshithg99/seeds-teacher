@@ -242,8 +242,7 @@ export function mountUI({ engine, voice, claude, player, saveKey, removeKey, cle
         h("div", { class: "row" }, h("button", { class: "btn yes", type: "button", onclick: onSubmitText, "aria-disabled": off ? "true" : null }, "Send"))));
     }
     if (s.secondary.length) kids.push(h("div", { class: "secondary" }, s.secondary.map((c) => h("button", { class: "textbtn", type: "button", "data-key": `s-${c.id}`, onclick: () => onChoice(c) }, c.label))));
-    kids.push(h("p", { class: "status" }, claude.available ? "Claude: on. Drafts are made by Claude in each class's language." : "Claude: off. Drafts are made on this device, in English. Add a key in Settings to use Claude.",
-      voice.turnInfo ? [h("br"), voice.turnInfo] : null));
+    if (voice.turnInfo) kids.push(h("p", { class: "status" }, voice.turnInfo));
     return kids;
   }
 
